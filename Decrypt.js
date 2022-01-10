@@ -1,13 +1,7 @@
 /* JS简易解密
 * 作者：NXY666
-* 用法：在FILE_NAME中填写路径，运行即可。
-* 输出：
-*   DecryptResult1.js：去除全局加密
-*   DecryptResult2.js：去除函数加密
-*   DecryptResult3.js：去除if-else死代码
-*   DecryptResult4.js：16进制数字转10进制、['XXX']转.XXX.
 */
-const FILE_NAME = "./template/2.js";
+const FILE_NAME = "./template/4.js";
 
 const fs = require("fs");
 const vm = require("vm");
@@ -32,6 +26,40 @@ String.prototype.splitByOtherStr = function (str, separator) {
 		return res;
 	}.bind(this));
 };
+String.prototype.searchOf = function (regexp, position) {
+	if (typeof regexp == "string") {
+		return this.indexOf(regexp, position);
+	}
+
+	if (position < 0) {
+		position = 0;
+	} else if (position >= this.length) {
+		return -1;
+	}
+
+	return position + this.slice(position).search(regexp);
+};
+String.prototype.lastSearchOf = function (regexp, position) {
+	if (typeof regexp != "object") {
+		return this.lastIndexOf(regexp, position);
+	} else {
+		regexp = new RegExp(regexp.source, regexp.flags + 'g');
+	}
+
+	let thisStr = this;
+	if (position < 0) {
+		return -1;
+	} else if (position < thisStr.length) {
+		thisStr = thisStr.slice(0, position + 1);
+	}
+
+	let posRes = -1, matchRes;
+	while ((matchRes = regexp.exec(thisStr)) != null) {
+		posRes = matchRes.index;
+	}
+
+	return posRes;
+};
 let globalContext = vm.createContext();
 
 function transStr(jsStr) {
@@ -44,7 +72,7 @@ function transStr(jsStr) {
 					signStack.pop();
 				} else if (signStack.length === 0) {
 					//[{( +-* <>=? &|! ~^
-					if (jsArr[nowPos - 1].match(/[\[{(+\-*<>=?&|!~^]/)) {
+					if (nowPos === 0 || jsArr[nowPos - 1].match(/[\[{(+\-*<>=?&|!~^;]/)) {
 						//开始正则
 						signStack.push(jsArr[nowPos]);
 					}
@@ -67,7 +95,7 @@ function transStr(jsStr) {
 				break;
 			case '\\':
 				if (signStack.top() === '"' || signStack.top() === "'" || signStack.top() === '/' || signStack.top() === '`') {
-					nowPos++;
+					jsArr[nowPos++] = jsArr[nowPos] = 'S';
 				}
 				break;
 			default:
@@ -105,9 +133,8 @@ function transLayer(jsStr, layer) {
 					}
 					signStack.pop();
 				} else {
-					console.log("“]”关闭失败");
+					console.error("“]”关闭失败");
 					throw EvalError("解析失败");
-					// return jsArr.join("");
 				}
 				break;
 			case '}':
@@ -118,9 +145,8 @@ function transLayer(jsStr, layer) {
 					}
 					signStack.pop();
 				} else {
-					console.log("“}”关闭失败");
+					console.error("“}”关闭失败");
 					throw EvalError("解析失败");
-					// return jsArr.join("");
 				}
 				break;
 			case ')':
@@ -131,9 +157,8 @@ function transLayer(jsStr, layer) {
 					}
 					signStack.pop();
 				} else {
-					console.log("“)”关闭失败");
+					console.error("“)”关闭失败");
 					throw EvalError("解析失败");
-					// return jsArr.join("");
 				}
 				break;
 			default:
@@ -157,7 +182,7 @@ function virtualGlobalEval(jsStr) {
 }
 
 function escapeEvalStr(str) {
-	return "'" + JSON.stringify(str).slice(1, -1).replace("'", "\\'").replace('\\"', '"') + "'";
+	return "'" + JSON.stringify(str).slice(1, -1).replace(/'/g, "\\'").replace(/\\"/g, '"') + "'";
 }
 function getQuoteEndPos(jsStr, startPos) {
 	if (startPos === undefined) {
@@ -179,9 +204,8 @@ function getQuoteEndPos(jsStr, startPos) {
 					//结束
 					signStack.pop();
 				} else {
-					console.log("“]”关闭失败");
+					console.error("“]”关闭失败");
 					throw EvalError("解析失败");
-					// return jsArr.join("");
 				}
 				break;
 			case '}':
@@ -189,9 +213,8 @@ function getQuoteEndPos(jsStr, startPos) {
 					//结束
 					signStack.pop();
 				} else {
-					console.log("“}”关闭失败");
+					console.error("“}”关闭失败");
 					throw EvalError("解析失败");
-					// return jsArr.join("");
 				}
 				break;
 			case ')':
@@ -199,9 +222,8 @@ function getQuoteEndPos(jsStr, startPos) {
 					//结束
 					signStack.pop();
 				} else {
-					console.log("“)”关闭失败");
+					console.error("“)”关闭失败");
 					throw EvalError("解析失败");
-					// return jsArr.join("");
 				}
 				break;
 			default:
@@ -221,15 +243,19 @@ function splitStatements(jsStr) {
 		splitJsArr.push(jsStr.slice(startPos, endPos + 1));
 		startPos = endPos + 1;
 	}
+	if (startPos < jsStr.length) {
+		splitJsArr.push(jsStr.slice(startPos));
+	}
 	return splitJsArr;
 }
 
+console.info("正在去除全局加密……");
 //如果是对象，则返回空数组
 function decryptGlobalJs(js) {
 	let transStrRes = transStr(js);
 
 	let boolMarkPos = undefined;
-	while ((boolMarkPos = transStrRes.lastIndexOf("![]", boolMarkPos - 1)) !== -1) {
+	while ((boolMarkPos === undefined || boolMarkPos - 1 >= 0) && (boolMarkPos = transStrRes.lastIndexOf("![]", boolMarkPos - 1)) !== -1) {
 		if (transStrRes[boolMarkPos - 1] === "!") {
 			js = js.replaceWithStr(boolMarkPos - 1, boolMarkPos + 3, "true");
 		} else {
@@ -249,7 +275,7 @@ function decryptGlobalJs(js) {
 		transStrRes = transStr(funcJs);
 
 		let decryptorPos = undefined;
-		while ((decryptorPos = transStrRes.lastIndexOf(decryptorName, decryptorPos - 1)) !== -1) {
+		while ((decryptorPos === undefined || decryptorPos - 1 >= 0) && (decryptorPos = transStrRes.lastIndexOf(decryptorName, decryptorPos - 1)) !== -1) {
 			let endPos = transStrRes.indexOf(")", decryptorPos);
 			funcJs = funcJs.replaceWithStr(decryptorPos, endPos + 1, escapeEvalStr(virtualEval(funcJs.slice(decryptorPos, endPos + 1))));
 		}
@@ -260,10 +286,12 @@ function decryptGlobalJs(js) {
 jsStatementsArr = decryptGlobalJs(js);
 fs.writeFileSync("DecryptResult1.js", jsStatementsArr.join("\n"));
 
+console.info("正在去除代码块加密……");
 //有则输出名字，无则输出false
 function getFuncDecryptorName(jsStr) {
 	//jsStr为空或不是以var 开头
 	if (!jsStr || jsStr.slice(0, 4) !== "var ") {
+		// console.log("初步检查不通过:", jsStr);
 		return false;
 	}
 
@@ -275,30 +303,24 @@ function getFuncDecryptorName(jsStr) {
 		}
 	});
 	if (checkRes) {
-		// console.log("符合条件：", jsStr);
+		// console.log("检查通过:", jsStr.slice(0, 100));
 		return transStrRes.slice(4, transStrRes.indexOf("="));
 	} else {
-		console.log("检查不通过：", jsStr);
-		transStrRes.slice(transStrRes.indexOf("{") + 1, transStrRes.lastIndexOf("}")).split(",").every(function (objectItem) {
-			let checkRes;
-			if ((checkRes = objectItem.match(/'(S)*':('(S)*'|function\((Q)*\){(Q)*})/))) {
-				return checkRes[0] === objectItem;
-			}
-		});
+		console.warn("非加密对象:", jsStr);
 		return false;
 	}
 }
 function replaceObjFunc(callFunc, callStr) {
-	console.log("*", callStr);
+	// console.log("*", callStr);
 	let funcStr = callFunc.toString(), transFuncStr = transStr(funcStr);
 	let funcParams = funcStr.slice(transFuncStr.indexOf("(") + 1, transFuncStr.indexOf(")")).splitByOtherStr(transFuncStr.slice(transFuncStr.indexOf("(") + 1, transFuncStr.indexOf(")")), ",");
 
 	let transCallLayer = transLayer(callStr), transCallLayer2 = transLayer(callStr, 2);
-	console.log("# callStr:", callStr, "\n- transCallLayer:", transCallLayer, "\n- transCallLayer2:", transCallLayer2);
+	// console.log("# callStr:", callStr, "\n- transCallLayer:", transCallLayer, "\n- transCallLayer2:", transCallLayer2);
 	let callParamsStr = callStr.slice(transCallLayer.indexOf("(") + 1, transCallLayer.indexOf(")"));
 	let callParams = callParamsStr.splitByOtherStr(transCallLayer2.slice(transCallLayer.indexOf("(") + 1, transCallLayer.indexOf(")")), ",");
 	if (funcParams.length === callParams.length) {
-		console.log(funcParams, callParams);
+		// console.log(funcParams, callParams);
 	} else {
 		console.error("×", funcParams, callParams);
 	}
@@ -308,10 +330,38 @@ function replaceObjFunc(callFunc, callStr) {
 		funcResStr = funcResStr.replace(param, callParams[index]);
 	});
 
-	console.log(funcStr, funcResStr, "\n");
+	// console.log(funcStr, funcResStr, "\n");
 	return funcResStr;
 }
-function decryptJsArr(funcJsArr) {
+function findCodeBlock(jsArr) {
+	return jsArr.map(function (jsStr) {
+		let transLayerRes = transLayer(jsStr);
+		let startPos = undefined;
+		while ((startPos === undefined || startPos - 1 >= 0) && (startPos = transLayerRes.lastIndexOf("{", startPos - 1)) !== -1) {
+			let endPos = getQuoteEndPos(jsStr, startPos);
+			let splitStatementsRes = splitStatements(jsStr.slice(startPos + 1, endPos));
+			if (splitStatementsRes.length) {
+				jsStr = jsStr.replaceWithStr(startPos + 1, endPos, decryptCodeBlockArr(splitStatementsRes).join(""));
+			}
+		}
+
+		transLayerRes = transLayer(jsStr);
+		startPos = undefined;
+		while ((startPos === undefined || startPos - 1 >= 0) && (startPos = transLayerRes.lastIndexOf("(", startPos - 1)) !== -1) {
+			let endPos = getQuoteEndPos(jsStr, startPos);
+			jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findCodeBlock([jsStr.slice(startPos + 1, endPos)]).join(""));
+		}
+
+		transLayerRes = transLayer(jsStr);
+		startPos = undefined;
+		while ((startPos === undefined || startPos - 1 >= 0) && (startPos = transLayerRes.lastIndexOf("[", startPos - 1)) !== -1) {
+			let endPos = getQuoteEndPos(jsStr, startPos);
+			jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findCodeBlock([jsStr.slice(startPos + 1, endPos)]).join(""));
+		}
+		return jsStr;
+	});
+}
+function decryptCodeBlockArr(funcJsArr) {
 	let decryptorObjName = getFuncDecryptorName(funcJsArr[0]);
 	//代码块解密
 	if (decryptorObjName) {
@@ -326,8 +376,6 @@ function decryptJsArr(funcJsArr) {
 			while ((decryptorPos === undefined || decryptorPos - 1 >= 0) && (decryptorPos = transStrRes.lastIndexOf(decryptorObjName, decryptorPos - 1)) !== -1) {
 				let leftSquarePos = transStrRes.indexOf("[", decryptorPos),
 					rightSquarePos = transStrRes.indexOf("]", decryptorPos);
-				// console.log(decryptorPos);
-				// console.log(decryptorObjName + funcJs.slice(leftSquarePos));
 
 				switch (virtualEval("typeof " + decryptorObjName + funcJs.slice(leftSquarePos, rightSquarePos + 1))) {
 					case "string": {
@@ -346,77 +394,18 @@ function decryptJsArr(funcJsArr) {
 		});
 	}
 
-	funcJsArr = funcJsArr.map(function (statement) {
-		let signStack = [];
-
-		let startPos = -1;
-		for (let nowPos = 0; nowPos < statement.length; nowPos++) {
-			switch (statement[nowPos]) {
-				case '{':
-					if (signStack.length === 0) {
-						startPos = nowPos;
-					}
-					if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-						signStack.push(statement[nowPos]);
-					}
-					break;
-				case '}':
-					if (signStack.top() === '{') {
-						signStack.pop();
-					}
-					if (signStack.length === 0 && startPos !== -1) {
-						let splitStatementsRes = splitStatements(statement.slice(startPos + 1, nowPos));
-						// console.log("quote:", statement.slice(startPos, nowPos + 1));
-						if (splitStatementsRes.length) {
-							statement = statement.replaceWithStr(startPos + 1, nowPos, decryptJsArr(splitStatementsRes).join(""));
-						}
-						startPos = -1;
-					}
-					break;
-				case '/':
-					if (signStack.top() === statement[nowPos]) {
-						//结束正则
-						signStack.pop();
-					} else if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-						//[{( +-* <>=? &|! ~^
-						if (statement[nowPos - 1].match(/[\[{(+\-*<>=?&|!~^]/)) {
-							//开始正则
-							signStack.push(statement[nowPos]);
-						}
-					}
-					break;
-				case '"':
-				case "'":
-				case '`':
-					if (signStack.top() === statement[nowPos]) {
-						//结束字符串
-						signStack.pop();
-					} else if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-						//开始字符串
-						signStack.push(statement[nowPos]);
-					}
-					break;
-				case '\\':
-					if (signStack.top() === '"' || signStack.top() === "'" || signStack.top() === '/' || signStack.top() === '`') {
-						nowPos++;
-					}
-					break;
-				default:
-					break;
-			}
-		}
-		return statement;
-	});
+	funcJsArr = findCodeBlock(funcJsArr);
 
 	return funcJsArr;
 }
-jsStatementsArr = decryptJsArr(jsStatementsArr);
+jsStatementsArr = decryptCodeBlockArr(jsStatementsArr);
 fs.writeFileSync("DecryptResult2.js", jsStatementsArr.join("\n"));
 
+console.info("正在去除 if...else 死代码……");
 function simplifyIf(ifJsStr) {
 	let ifRes = eval(ifJsStr.slice(2, 21));
-	let elsePos = skipQuote(ifJsStr, 21) + 1;
-	let endPos = skipQuote(ifJsStr, elsePos + 4);
+	let elsePos = getQuoteEndPos(ifJsStr, 21) + 1;
+	let endPos = getQuoteEndPos(ifJsStr, elsePos + 4);
 
 	// console.log("true: ", ifJsStr.slice(22, elsePos - 1));
 	// console.log("false: ", ifJsStr.slice(elsePos + 5, endPos));
@@ -425,58 +414,6 @@ function simplifyIf(ifJsStr) {
 		return ifJsStr.slice(22, elsePos - 1) + ifJsStr.slice(endPos + 1);
 	} else {
 		return ifJsStr.slice(elsePos + 5, endPos) + ifJsStr.slice(endPos + 1);
-	}
-}
-function skipQuote(jsStr, startPos) {
-	let signStack = [];
-
-	for (let nowPos = startPos; nowPos < jsStr.length; nowPos++) {
-		switch (jsStr[nowPos]) {
-			case '{':
-				signStack.length === 0 && (startPos = nowPos);
-				if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-					signStack.push(jsStr[nowPos]);
-				}
-				break;
-			case '}':
-				if (signStack.top() === '{') {
-					signStack.pop();
-				}
-				break;
-			case '/':
-				if (signStack.top() === jsStr[nowPos]) {
-					//结束正则
-					signStack.pop();
-				} else if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-					//[{( +-* <>=? &|! ~^
-					if (jsStr[nowPos - 1].match(/[\[{(+\-*<>=?&|!~^]/)) {
-						//开始正则
-						signStack.push(jsStr[nowPos]);
-					}
-				}
-				break;
-			case '"':
-			case "'":
-			case '`':
-				if (signStack.top() === jsStr[nowPos]) {
-					//结束字符串
-					signStack.pop();
-				} else if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-					//开始字符串
-					signStack.push(jsStr[nowPos]);
-				}
-				break;
-			case '\\':
-				if (signStack.top() === '"' || signStack.top() === "'" || signStack.top() === '/' || signStack.top() === '`') {
-					nowPos++;
-				}
-				break;
-			default:
-				break;
-		}
-		if (signStack.length === 0) {
-			return nowPos;
-		}
 	}
 }
 function clearDeadCodes(globalJsArr) {
@@ -491,7 +428,7 @@ function clearDeadCodes(globalJsArr) {
 						signStack.pop();
 					} else if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
 						//[{( +-* <>=? &|! ~^
-						if (statement[nowPos - 1].match(/[\[{(+\-*<>=?&|!~^]/)) {
+						if (nowPos === 0 || statement[nowPos - 1].match(/[\[{(+\-*<>=?&|!~^]/)) {
 							//开始正则
 							signStack.push(statement[nowPos]);
 						}
@@ -529,138 +466,71 @@ function clearDeadCodes(globalJsArr) {
 jsStatementsArr = clearDeadCodes(jsStatementsArr);
 fs.writeFileSync("DecryptResult3.js", jsStatementsArr.join("\n"));
 
-function parseCrochets(lastChar, quoteJsStr) {
-	let signStack = [];
-
-	let endPos = 0;
-	for (let nowPos = 0; nowPos < quoteJsStr.length; nowPos++) {
-		switch (quoteJsStr[nowPos]) {
-			case '[':
-				if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-					signStack.push('[');
-				}
-				break;
-			case ']':
-				if (signStack.top() === '[') {
-					signStack.pop();
-				}
-				if (signStack.length === 0) {
-					endPos = nowPos;
-				}
-				break;
-			case '/':
-				if (signStack.top() === quoteJsStr[nowPos]) {
-					//结束正则
-					signStack.pop();
-				} else if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-					//[{( +-* <>=? &|! ~^
-					if (quoteJsStr[nowPos - 1].match(/[\[{(+\-*<>=?&|!~^]/)) {
-						//开始正则
-						signStack.push(quoteJsStr[nowPos]);
-					}
-				}
-				break;
-			case '"':
-			case "'":
-			case '`':
-				if (signStack.top() === quoteJsStr[nowPos]) {
-					//结束字符串
-					signStack.pop();
-				} else if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-					//开始字符串
-					signStack.push(quoteJsStr[nowPos]);
-				}
-				break;
-			case '\\':
-				if (signStack.top() === '"' || signStack.top() === "'" || signStack.top() === '/' || signStack.top() === '`') {
-					nowPos++;
-				}
-				break;
-			default:
-				break;
-		}
-		if (signStack.length === 0) {
-			let varStr;
-			varStr = quoteJsStr.slice(2, nowPos - 1);
-			if (quoteJsStr[1] === '(' && quoteJsStr[nowPos - 1] === ')') {
-				varStr = varStr.slice(1, -1);
-			}
-			// 中间有运算就不行
-			if (varStr.replace(/\\'/g, "Q").indexOf("'") !== -1) {
-				console.log(varStr);
-				return quoteJsStr;
-			}
-			quoteJsStr = quoteJsStr.slice(nowPos + 1);
-			// 排除字符串数组
-			if (!lastChar.match(/[ \[{(+\-*\\%<>=!^&|~?:,;]/)) {
-				if (lastChar !== '.') {
-					varStr = "." + varStr;
-				}
-				if (!quoteJsStr[0].match(/[ .\[{()}\]+\-*\\%<>=!^&|~?:,;]/)) {
-					varStr += ".";
-				}
-			}
-			return varStr + quoteJsStr;
-		}
-	}
-}
+console.info("正在提升代码可读性……");
 function decryptFormat(globalJsArr) {
 	return globalJsArr.map(function (statement) {
-		let signStack = [];
-
-		for (let nowPos = 0; nowPos < statement.length; nowPos++) {
-			let nextStr = statement.slice(nowPos);
-			switch (statement[nowPos]) {
-				case '0':
-					if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-						if (nextStr.search(/0x[0-9a-fA-F]*/) === 0 && statement[nowPos - 1].match(/[ .\[{()}\]+\-*\\%<>=!^&|?:,]/)) {
-							let oldInt = nextStr.match(/0x[0-9a-fA-F]*/)[0].toString();
-							let newInt = parseInt(oldInt, 16).toString();
-							statement = statement.slice(0, nowPos) + newInt + nextStr.slice(oldInt.length);
-						}
-					}
-					break;
-				case '[':
-					if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-						if (nextStr.search(/\[(\()?'([\w])*?'(\))?]/) === 0) {
-							statement = statement.slice(0, nowPos) + parseCrochets(statement[nowPos - 1], nextStr);
-						}
-					}
-					break;
-				case '/':
-					if (signStack.top() === statement[nowPos]) {
-						//结束正则
-						signStack.pop();
-					} else if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-						//[{( +-* <>=? &|! ~^
-						if (statement[nowPos - 1].match(/[\[{(+\-*<>=?&|!~^]/)) {
-							//开始正则
-							signStack.push(statement[nowPos]);
-						}
-					}
-					break;
-				case '"':
-				case "'":
-				case '`':
-					if (signStack.top() === statement[nowPos]) {
-						//结束字符串
-						signStack.pop();
-					} else if (signStack.top() !== '"' && signStack.top() !== "'" && signStack.top() !== '/' && signStack.top() !== '`') {
-						//开始字符串
-						signStack.push(statement[nowPos]);
-					}
-					break;
-				case '\\':
-					if (signStack.top() === '"' || signStack.top() === "'" || signStack.top() === '/' || signStack.top() === '`') {
-						nowPos++;
-					}
-					break;
-				default:
-					break;
+		let transStrRes = transStr(statement);
+		let hexNumberPos = undefined;
+		while ((hexNumberPos = transStrRes.lastSearchOf(/0x([0-9a-fA-F])*/, hexNumberPos - 1)) !== -1) {
+			let activeNumStr = transStrRes.slice(hexNumberPos).match(/0x([0-9a-fA-F])*/)[0];
+			let checkNumberRegexp = /[{}\[\]().,+\-*\/~!%<>=&|^?:; ]/;
+			if (
+				transStrRes[hexNumberPos - 1].match(checkNumberRegexp) != null &&
+				transStrRes[hexNumberPos + activeNumStr.length].match(checkNumberRegexp) != null
+			) {
+				// console.log("√", hexNumberPos, activeNumStr);
+				statement = statement.replaceWithStr(hexNumberPos, hexNumberPos + activeNumStr.length, parseInt(activeNumStr, 16));
+			} else {
+				// console.log("×", hexNumberPos, activeNumStr, "[", transStrRes[hexNumberPos - 1], ",", transStrRes[hexNumberPos + activeNumStr.length], "]");
 			}
 		}
+
+		transStrRes = transStr(statement);
+		let objIndexerPos = undefined;
+		while ((objIndexerPos = transStrRes.lastSearchOf(/\['(S)*.']/, objIndexerPos - 1)) !== -1) {
+			let activeIndexerStr = transStrRes.slice(objIndexerPos).match(/\['(S)*.']/)[0];
+			let leftSplitter, rightSplitter;
+
+			if (transStrRes[objIndexerPos + activeIndexerStr.length].match(/[^{}\[\]().,+\-*\/~!%<>=&|^?:; ]/) != null) {
+				// console.log("√ R", objIndexerPos, activeIndexerStr);
+				rightSplitter = ".";
+			} else {
+				// console.log("× R", objIndexerPos, activeIndexerStr, "[", transStrRes[objIndexerPos - 1], ",", transStrRes[objIndexerPos + activeIndexerStr.length], "]");
+				rightSplitter = "";
+			}
+			statement = statement.replaceWithStr(objIndexerPos + activeIndexerStr.length - 2, objIndexerPos + activeIndexerStr.length, rightSplitter);
+			transStrRes = transStrRes.replaceWithStr(objIndexerPos + activeIndexerStr.length - 2, objIndexerPos + activeIndexerStr.length, rightSplitter);
+
+			if (transStrRes[objIndexerPos - 1] === "/") {
+				let lastRegExpPos = transStrRes.lastSearchOf(/\/(S)*\//, objIndexerPos);
+				if (lastRegExpPos === -1) {
+					leftSplitter = "";
+					// console.log("× E", objIndexerPos, activeIndexerStr);
+				} else {
+					let activeRegExpStr = transStrRes.slice(lastRegExpPos).match(/\/(S)*\//)[0];
+					if (lastRegExpPos + activeRegExpStr.length === objIndexerPos) {
+						leftSplitter = ".";
+						// console.log("√ E", objIndexerPos, activeIndexerStr);
+					} else {
+						leftSplitter = "";
+						// console.log("× E", objIndexerPos, activeIndexerStr);
+					}
+				}
+			} else if (transStrRes[objIndexerPos - 1].match(/[^{}\[(.,+\-*~!%<>=&|^?:; ]/) != null) {
+				// console.log("√ L", objIndexerPos, activeIndexerStr);
+				leftSplitter = ".";
+			} else {
+				// console.log("× L", objIndexerPos, activeIndexerStr, "[", transStrRes[objIndexerPos - 1], ",", transStrRes[objIndexerPos + activeIndexerStr.length], "]");
+				leftSplitter = "";
+			}
+			statement = statement.replaceWithStr(objIndexerPos, objIndexerPos + 2, leftSplitter);
+			transStrRes = transStrRes.replaceWithStr(objIndexerPos, objIndexerPos + 2, leftSplitter);
+		}
+
 		return statement;
 	});
 }
 jsStatementsArr = decryptFormat(jsStatementsArr);
 fs.writeFileSync("DecryptResult4.js", jsStatementsArr.join("\n"));
+
+console.info("全部完毕！");
