@@ -132,5 +132,5 @@
 
 * DecryptResult1.js：去除全局加密
 * DecryptResult2.js：去除代码块加密
-* DecryptResult3.js：去除 if...else 死代码
+* DecryptResult3.js：去除 if...else 和 switch.case 死代码
 * DecryptResult4.js：提升代码可读性(16进制数字转换为10进制数字、“\['XXX'\]”转换为“.XXX”)
