@@ -1,12 +1,12 @@
 {
   "name": "DecryptV6",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "2.1.0",
+  "description": "A decryptor for JsjiamiV6.",
+  "main": "DecryptV6.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "decrypt": "node DecryptV6.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "NXY666",
   "license": "ISC"
 }
