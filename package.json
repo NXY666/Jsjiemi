@@ -1,9 +1,10 @@
 {
   "name": "jsjiemi",
-  "version": "2.1.0",
-  "description": "",
-  "main": "index.js",
+  "version": "2.2.0",
+  "description": "A decryptor for JavaScript.",
+  "main": "Decrypt.js",
   "scripts": {
+    "decrypt": "node Decrypt.js"
   },
   "keywords": [],
   "author": "NXY666",
