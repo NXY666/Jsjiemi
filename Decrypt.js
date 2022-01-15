@@ -24,6 +24,7 @@ String.prototype.splitByOtherStr = function (str, separator) {
 		return res;
 	}.bind(this));
 };
+// noinspection JSUnusedGlobalSymbols
 String.prototype.searchOf = function (regexp, position) {
 	if (typeof regexp == "string") {
 		return this.indexOf(regexp, position);
@@ -59,6 +60,24 @@ String.prototype.lastSearchOf = function (regexp, position) {
 	return posRes;
 };
 
+/* 日志工具 */
+function showMsgProgress(msg) {
+	console.clear();
+	console.warn(`* 正在${msg}……`);
+}
+function showNumProgress(msg, nowProgress, maxProgress) {
+	let percent = Math.floor(nowProgress / maxProgress * 50);
+	let progressArr = [];
+	for (let i = 0; i < 50; i++) {
+		if (i < percent) {
+			progressArr.push("▇");
+		} else {
+			progressArr.push(" ");
+		}
+	}
+	console.clear();
+	console.warn(`* 正在${msg}…… [${progressArr.join("")}] ${(nowProgress / maxProgress * 100).toFixed(1).padStart(5, " ")}%`);
+}
 /* 分析代码工具 */
 function transStr(jsStr) {
 	let signStack = [], jsArr = jsStr.split("");
@@ -243,7 +262,9 @@ function virtualGlobalEval(jsStr) {
 	return vm.runInContext(jsStr, globalContext);
 }
 
-console.info("正在解除全局加密……");
+const START_TIME = new Date().getTime();
+
+showMsgProgress("解除全局加密");
 // 如果是对象，则返回空数组
 function decryptGlobalJs(js) {
 	let transStrRes = transStr(js);
@@ -282,7 +303,7 @@ let js = fs.readFileSync(FILE_NAME).toString();
 jsStatementsArr = decryptGlobalJs(js);
 fs.writeFileSync("DecryptResult1.js", jsStatementsArr.join("\n"));
 
-console.info("正在解除代码块加密……");
+showMsgProgress("解除代码块加密");
 // 有则输出名字，无则输出false
 function getFuncDecryptorName(jsStr) {
 	// jsStr为空或不是以var 开头
@@ -330,8 +351,8 @@ function replaceObjFunc(callFunc, callStr) {
 	// console.log(funcStr, funcResStr, "\n");
 	return funcResStr;
 }
-function findAndDecryptCodeBlock(jsArr) {
-	return jsArr.map(function (jsStr) {
+function findAndDecryptCodeBlock(jsArr, isShowProgress) {
+	return jsArr.map(function (jsStr, progress) {
 		let transLayerRes = transLayer(jsStr);
 		let startPos = Number.POSITIVE_INFINITY;
 		while ((startPos === Number.POSITIVE_INFINITY || startPos - 1 >= 0) && (startPos = Math.max(
@@ -349,10 +370,16 @@ function findAndDecryptCodeBlock(jsArr) {
 				jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndDecryptCodeBlock([jsStr.slice(startPos + 1, endPos)]).join(""));
 			}
 		}
+		if (isShowProgress) {
+			showNumProgress("解除代码块加密", progress + 1, jsArr.length);
+		}
 		return jsStr;
 	});
 }
-function decryptCodeBlockArr(jsArr) {
+function decryptCodeBlockArr(jsArr, isShowProgress) {
+	if (isShowProgress) {
+		showNumProgress("解除代码块加密", 0, jsArr.length);
+	}
 	let decryptorObjName = getFuncDecryptorName(jsArr[0]);
 	// 代码块解密
 	if (decryptorObjName) {
@@ -384,13 +411,12 @@ function decryptCodeBlockArr(jsArr) {
 			return jsStr;
 		});
 	}
-
-	return findAndDecryptCodeBlock(jsArr);
+	return findAndDecryptCodeBlock(jsArr, isShowProgress);
 }
-jsStatementsArr = decryptCodeBlockArr(jsStatementsArr);
+jsStatementsArr = decryptCodeBlockArr(jsStatementsArr, true);
 fs.writeFileSync("DecryptResult2.js", jsStatementsArr.join("\n"));
 
-console.info("正在清理死代码（花指令）……");
+showMsgProgress("清理死代码（花指令）");
 function simplifyIf(ifJsStr) {
 	let ifRes = eval(ifJsStr.slice(2, 21));
 	let elsePos = getQuoteEndPos(ifJsStr, 21) + 1, endPos = getQuoteEndPos(ifJsStr, elsePos + 4);
@@ -401,8 +427,8 @@ function simplifyIf(ifJsStr) {
 		return ifJsStr.slice(elsePos + 5, endPos);
 	}
 }
-function findAndClearDeadCodes(jsArr) {
-	return jsArr.map(function (jsStr) {
+function findAndClearDeadCodes(jsArr, isShowProgress) {
+	return jsArr.map(function (jsStr, progress) {
 		let transLayerRes = transLayer(jsStr);
 		let startPos = Number.POSITIVE_INFINITY;
 		while ((startPos === Number.POSITIVE_INFINITY || startPos - 1 >= 0) && (startPos = Math.max(
@@ -421,10 +447,16 @@ function findAndClearDeadCodes(jsArr) {
 				jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndClearDeadCodes([jsStr.slice(startPos + 1, endPos)]).join(""));
 			}
 		}
+		if (isShowProgress) {
+			showNumProgress("清理死代码（花指令）", progress + 1, jsArr.length);
+		}
 		return jsStr;
 	});
 }
-function clearDeadCodes(jsArr) {
+function clearDeadCodes(jsArr, isShowProgress) {
+	if (isShowProgress) {
+		showNumProgress("清理死代码（花指令）", 0, jsArr.length);
+	}
 	if (jsArr.length === 1) {
 		// if死代码
 		let transStrRes = transStr(jsArr[0]), transLayerRes = transLayer(jsArr[0]);
@@ -483,12 +515,12 @@ function clearDeadCodes(jsArr) {
 			}
 		}
 	}
-	return findAndClearDeadCodes(jsArr);
+	return findAndClearDeadCodes(jsArr, isShowProgress);
 }
-jsStatementsArr = clearDeadCodes(jsStatementsArr);
+jsStatementsArr = clearDeadCodes(jsStatementsArr, true);
 fs.writeFileSync("DecryptResult3.js", jsStatementsArr.join("\n"));
 
-console.info("正在提升代码可读性……");
+showMsgProgress("提升代码可读性");
 function decryptFormat(globalJsArr) {
 	return globalJsArr.map(function (statement) {
 		let transStrRes = transStr(statement);
@@ -559,4 +591,8 @@ function decryptFormat(globalJsArr) {
 jsStatementsArr = decryptFormat(jsStatementsArr);
 fs.writeFileSync("DecryptResult4.js", jsStatementsArr.join("\n"));
 
-console.info("全部完毕！");
+const END_TIME = new Date().getTime();
+
+console.clear();
+console.info(`* 解密完成！
+* 耗时：${END_TIME - START_TIME}ms`);
