@@ -1,6 +1,6 @@
 {
   "name": "DecryptV6",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "A decryptor for JsjiamiV6.",
   "main": "DecryptV6.js",
   "scripts": {
