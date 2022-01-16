@@ -303,8 +303,8 @@
 
 ## 使用方法
 
-1. 在 [DecryptV6.js](https://github.com/NXY666/JavaScriptV6Decryptor/blob/master/DecryptV6.js) 的常量 ```FILE_NAME``` 中填写需解密的脚本路径。
-2. 运行 [DecryptV6.js](https://github.com/NXY666/JavaScriptV6Decryptor/blob/master/DecryptV6.js) 。
+1. 在 [```DecryptV6.js```](https://github.com/NXY666/JavaScriptV6Decryptor/blob/master/DecryptV6.js) 的常量 ```FILE_NAME``` 中填写需解密的脚本路径。
+2. 运行 [```DecryptV6.js```](https://github.com/NXY666/JavaScriptV6Decryptor/blob/master/DecryptV6.js) 。
 
 ## 输出结果
 
