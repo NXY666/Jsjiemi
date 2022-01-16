@@ -1,7 +1,9 @@
 /*
 * JsjiamiV6简易解密（作者：NXY666）
 */
-const FILE_NAME = "./template/4.js";
+const FILE_NAME = "./template/1.js";
+// const FILE_NAME = "./DecryptResult3.js";
+// const FILE_NAME = "d:/111.js";
 
 const fs = require("fs");
 const vm = require("vm");
@@ -59,6 +61,8 @@ String.prototype.lastSearchOf = function (regexp, position) {
 
 	return posRes;
 };
+
+// fs.writeFileSync("res.txt", "");
 
 /* 日志工具 */
 function showMsgProgress(msg) {
@@ -241,17 +245,69 @@ function getQuoteEndPos(jsStr, startPos) {
 	}
 	throw Error("未知错误");
 }
-function splitStatements(jsStr) {
+// 如果是对象，则返回空数组
+function splitStatements(jsStr, statementType) {
 	let transLayerRes = transLayer(jsStr), splitJsArr = [];
-	let startPos = 0, endPos = undefined;
-	while ((endPos = transLayerRes.indexOf(";", startPos)) !== -1) {
-		splitJsArr.push(jsStr.slice(startPos, endPos + 1));
-		startPos = endPos + 1;
+	if (statementType === undefined) {
+		let tmpStr = transLayerRes.replace(/([0-9a-zA-Z])+/g, "W");
+		if (tmpStr === "") {
+			// 空
+			statementType = "EMPTY";
+		} else if (/^([^,:;]+:[^,:;]+,)*[^,:;]+:[^,:;]+$/.test(tmpStr)) {
+			// 对象
+			statementType = "OBJECT";
+		} else if (/^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~]|defalut:)/.test(transLayerRes.slice(0, 8))) {
+			// case
+			statementType = "SWITCH_CASE";
+		} else {
+			// 普通
+			statementType = "COMMON";
+		}
 	}
-	if (startPos < jsStr.length) {
-		splitJsArr.push(jsStr.slice(startPos));
+	switch (statementType) {
+		case "EMPTY": {
+			break;
+		}
+		case "OBJECT": {
+			break;
+		}
+		case "COMMON":
+		case "SWITCH_CASE": {
+			let startPos = 0, endPos;
+			while ((endPos = transLayerRes.indexOf(";", startPos)) !== -1) {
+				let partJsStr = jsStr.slice(startPos, endPos + 1),
+					transPartJsStr = transLayerRes.slice(startPos, endPos + 1);
+				if (statementType === "SWITCH_CASE" && /^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~]|defalut:)/.test(transPartJsStr.slice(0, 8))) {
+					endPos = transPartJsStr.indexOf(":");
+					splitJsArr.push(partJsStr.slice(0, endPos + 1));
+					startPos += endPos + 1;
+				} else if ((() => {
+					let matchRes = transPartJsStr.match(/^if\(Q+\){?.*?[;}](else if\(Q+\){?.*?[;}])*?(else{?.*?[;}])?/);
+					return matchRes && (endPos = startPos + matchRes[0].length);
+				})()) {
+					splitJsArr.push(jsStr.slice(startPos, endPos));
+					startPos = endPos;
+				} else {
+					splitJsArr.push(jsStr.slice(startPos, endPos + 1));
+					startPos = endPos + 1;
+				}
+			}
+			if (startPos < jsStr.length) {
+				splitJsArr.push(jsStr.slice(startPos));
+			}
+			break;
+		}
+		default: {
+			throw "未知的代码块类型 " + statementType;
+		}
 	}
-	return splitJsArr;
+	splitJsArr["type"] = statementType;
+	return splitJsArr.filter(function (item) {
+		item = item.trim();
+		if (item && item !== ";") {
+			return true;
+		}
+	});
 }
 /* 虚拟机执行工具 */
 let globalContext = vm.createContext();
@@ -265,10 +321,8 @@ function virtualGlobalEval(jsStr) {
 const START_TIME = new Date().getTime();
 
 showMsgProgress("解除全局加密");
-// 如果是对象，则返回空数组
 function decryptGlobalJs(js) {
 	let transStrRes = transStr(js);
-
 	let boolMarkPos = Number.POSITIVE_INFINITY;
 	while ((boolMarkPos === Number.POSITIVE_INFINITY || boolMarkPos - 1 >= 0) && (boolMarkPos = transStrRes.lastIndexOf("![]", boolMarkPos - 1)) !== -1) {
 		if (transStrRes[boolMarkPos - 1] === "!") {
@@ -277,9 +331,7 @@ function decryptGlobalJs(js) {
 			js = js.replaceWithStr(boolMarkPos, boolMarkPos + 3, ((transStrRes[boolMarkPos - 1].match(/[{}\[\]().,+\-*\/~!%<>=&|^?:; @]/) ? "" : " ")) + "false");
 		}
 	}
-
 	let jsArr = splitStatements(js);
-
 	for (let i = 0; i < 3; i++) {
 		virtualGlobalEval(jsArr[i]);
 	}
@@ -287,11 +339,11 @@ function decryptGlobalJs(js) {
 	let decryptor = jsArr[2];
 	let decryptorName = decryptor.slice(decryptor.indexOf("function") + 9, decryptor.indexOf("(")) || decryptor.slice(decryptor.indexOf("var ") + 4, decryptor.indexOf("=function("));
 
-	return jsArr.slice(3, -1).map(function (funcJs) {
+	return jsArr.slice(3).map(function (funcJs) {
 		transStrRes = transStr(funcJs);
 
 		let decryptorPos = Number.POSITIVE_INFINITY;
-		while ((decryptorPos === Number.POSITIVE_INFINITY || decryptorPos - 1 >= 0) && (decryptorPos = transStrRes.lastIndexOf(decryptorName, decryptorPos - 1)) !== -1) {
+		while ((decryptorPos === Number.POSITIVE_INFINITY || decryptorPos - 1 >= 0) && (decryptorPos = transStrRes.lastIndexOf(`${decryptorName}('`, decryptorPos - 1)) !== -1) {
 			let endPos = transStrRes.indexOf(")", decryptorPos);
 			funcJs = funcJs.replaceWithStr(decryptorPos, endPos + 1, escapeEvalStr(virtualEval(funcJs.slice(decryptorPos, endPos + 1))));
 		}
@@ -301,6 +353,7 @@ function decryptGlobalJs(js) {
 }
 let js = fs.readFileSync(FILE_NAME).toString();
 jsStatementsArr = decryptGlobalJs(js);
+// jsStatementsArr = splitStatements(js);
 fs.writeFileSync("DecryptResult1.js", jsStatementsArr.join("\n"));
 
 showMsgProgress("解除代码块加密");
@@ -308,7 +361,8 @@ showMsgProgress("解除代码块加密");
 function getFuncDecryptorName(jsStr) {
 	// jsStr为空或不是以var 开头
 	if (!jsStr || jsStr.slice(0, 4) !== "var ") {
-		// console.log("初步检查不通过:", jsStr);
+		// fs.appendFileSync("res.txt", "初步检查不通过:" + jsStr.slice(0, 100) + "\n");
+		// console.log("初步检查不通过:", jsStr.slice(0, 100));
 		return false;
 	}
 
@@ -320,9 +374,11 @@ function getFuncDecryptorName(jsStr) {
 		}
 	});
 	if (checkRes) {
+		// fs.appendFileSync("res.txt", "检查通过:" + jsStr.slice(0, 100) + "\n");
 		// console.log("检查通过:", jsStr.slice(0, 100));
 		return transStrRes.slice(4, transStrRes.indexOf("="));
 	} else {
+		// fs.appendFileSync("res.txt", "非加密对象:" + jsStr + "\n");
 		// console.warn("非加密对象:", jsStr);
 		return false;
 	}
@@ -345,10 +401,12 @@ function replaceObjFunc(callFunc, callStr) {
 
 	let funcResStr = funcStr.slice(transFuncStr.indexOf("{return ") + 8, transFuncStr.lastIndexOf(";}"));
 	funcParams.forEach(function (param, index) {
+		if (transLayer(callParams[index]).match(/[^=!]=[^=]/)) {
+			callParams[index] = "(" + callParams[index] + ")";
+		}
 		funcResStr = funcResStr.replace(param, callParams[index]);
 	});
 
-	// console.log(funcStr, funcResStr, "\n");
 	return funcResStr;
 }
 function findAndDecryptCodeBlock(jsArr, isShowProgress) {
@@ -365,10 +423,10 @@ function findAndDecryptCodeBlock(jsArr, isShowProgress) {
 				let splitStatementsRes = splitStatements(jsStr.slice(startPos + 1, endPos));
 				if (splitStatementsRes.length) {
 					jsStr = jsStr.replaceWithStr(startPos + 1, endPos, decryptCodeBlockArr(splitStatementsRes).join(""));
+					continue;
 				}
-			} else {
-				jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndDecryptCodeBlock([jsStr.slice(startPos + 1, endPos)]).join(""));
 			}
+			jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndDecryptCodeBlock([jsStr.slice(startPos + 1, endPos)]).join(""));
 		}
 		if (isShowProgress) {
 			showNumProgress("解除代码块加密", progress + 1, jsArr.length);
@@ -386,7 +444,7 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 		virtualGlobalEval(jsArr[0]);
 
 		let transStrRes;
-
+		// TODO 识别是否添加括号（二叉树？）
 		jsArr = jsArr.slice(1).map(function (jsStr) {
 			transStrRes = transStr(jsStr);
 
@@ -418,11 +476,12 @@ fs.writeFileSync("DecryptResult2.js", jsStatementsArr.join("\n"));
 
 showMsgProgress("清理死代码（花指令）");
 function simplifyIf(ifJsStr) {
-	let ifRes = eval(ifJsStr.slice(2, 21));
-	let elsePos = getQuoteEndPos(ifJsStr, 21) + 1, endPos = getQuoteEndPos(ifJsStr, elsePos + 4);
+	let conditionStartPos = 2, conditionEndPos = getQuoteEndPos(ifJsStr, conditionStartPos);
+	let ifRes = eval(ifJsStr.slice(conditionStartPos, conditionEndPos + 1));
+	let elsePos = getQuoteEndPos(ifJsStr, conditionEndPos + 1) + 1, endPos = getQuoteEndPos(ifJsStr, elsePos + 4);
 
 	if (ifRes) {
-		return ifJsStr.slice(22, elsePos - 1);
+		return ifJsStr.slice(conditionEndPos + 2, elsePos - 1);
 	} else {
 		return ifJsStr.slice(elsePos + 5, endPos);
 	}
@@ -438,14 +497,13 @@ function findAndClearDeadCodes(jsArr, isShowProgress) {
 		)) !== -1) {
 			let endPos = getQuoteEndPos(jsStr, startPos);
 			if (jsStr[startPos] === "{") {
-				let endPos = getQuoteEndPos(jsStr, startPos);
 				let splitStatementsRes = splitStatements(jsStr.slice(startPos + 1, endPos));
 				if (splitStatementsRes.length) {
 					jsStr = jsStr.replaceWithStr(startPos + 1, endPos, clearDeadCodes(splitStatementsRes).join(""));
+					continue;
 				}
-			} else {
-				jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndClearDeadCodes([jsStr.slice(startPos + 1, endPos)]).join(""));
 			}
+			jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndClearDeadCodes([jsStr.slice(startPos + 1, endPos)]).join(""));
 		}
 		if (isShowProgress) {
 			showNumProgress("清理死代码（花指令）", progress + 1, jsArr.length);
@@ -460,15 +518,15 @@ function clearDeadCodes(jsArr, isShowProgress) {
 	if (jsArr.length === 1) {
 		// if死代码
 		let transStrRes = transStr(jsArr[0]), transLayerRes = transLayer(jsArr[0]);
-		if (transStrRes.search(/if\('([a-zA-Z]){5}'([=!])?=='([a-zA-Z]){5}'\)/) === 0) {
-			let transFakeIfStr = transLayerRes.match(/if\((Q){17}\){(Q)*}else{(Q)*}/)[0];
-			return clearDeadCodes(splitStatements(simplifyIf(jsArr[0].slice(0, transFakeIfStr.length))));
+		if (/^if\('S+'[=!]=='S+'\)/.test(transStrRes)) {
+			let transFakeIfStr = transLayerRes.match(/if\(Q*\){Q*}else{Q*}/)[0];
+			return clearDeadCodes(splitStatements(simplifyIf(jsArr[0].slice(0, transFakeIfStr.length)), "COMMON"));
 		}
 	} else if (jsArr.length === 2) {
 		// switch死代码
 		if (
-			jsArr[0].search(/var (\S*?)='[0-9|]*?'\['split']\('\|'\),(\S*?)=0x0;/) === 0 &&
-			jsArr[1].search(/while\(true\){switch\((\S*?)\[(\S*?)\+\+]\)/) === 0
+			/^var (\S*?)='[0-9|]*?'\['split']\('\|'\),(\S*?)=0x0;/.test(jsArr[0]) &&
+			/^while\(true\){switch\((\S*?)\[(\S*?)\+\+]\)/.test(jsArr[1])
 		) {
 			let initMatch = jsArr[0].match(/var (\S*?)='[0-9|]*?'\['split']\('\|'\),(\S*?)=0x0;/),
 				whileMatch = jsArr[1].match(/while\(true\){switch\((\S*?)\[(\S*?)\+\+]\)/);
@@ -499,12 +557,7 @@ function clearDeadCodes(jsArr, isShowProgress) {
 							if (continuePos === -1) {
 								continuePos = Number.POSITIVE_INFINITY;
 							}
-							let res = Math.min(casePos, continuePos);
-							if (res !== Number.POSITIVE_INFINITY) {
-								return res;
-							} else {
-								throw Error("意料之外的switch...case死代码");
-							}
+							return Math.min(casePos, continuePos);
 						})();
 					caseList.push(caseBlock.slice(startPos, endPos).replace("continue;", ""));
 				});
@@ -545,9 +598,38 @@ function decryptFormat(globalJsArr) {
 			let activeIndexerStr = transStrRes.slice(objIndexerPos).match(/\['(S)*.']/)[0];
 			let leftSplitter, rightSplitter;
 
-			if (statement.slice(objIndexerPos + 2, objIndexerPos + activeIndexerStr.length - 2).match(/[{}\[\]().,+\-*\/~!%<>=&|^?:; @]/)) {
-				// 包含特殊符号，不转换
+			let isAheadRegexp = (() => {
+				if (transStrRes[objIndexerPos - 1] !== "/") {
+					return false;
+				}
+				let lastRegExpPos = transStrRes.lastSearchOf(/\/(S)*\//, objIndexerPos);
+				if (lastRegExpPos === -1) {
+					return false;
+				} else {
+					let activeRegExpStr = transStrRes.slice(lastRegExpPos).match(/\/(S)*\//)[0];
+					return lastRegExpPos + activeRegExpStr.length === objIndexerPos;
+				}
+			})();
+
+			if ((() => { // 判断前面是不是数字
+					if (!transStrRes[objIndexerPos - 1].match(/[0-9.]/)) {
+						return false;
+					}
+					let pos = objIndexerPos;
+					while (--pos) {
+						if (transStrRes[pos].match(/[0-9.]/)) {
+						} else {
+							return !!transStrRes[pos].match(/[{}\[\]().,+\-*\/~!%<>=&|^?:; @]/);
+						}
+					}
+				})() ||
+				transStrRes[objIndexerPos - 1].match(/[{}\[(,+\-*~!%<>=&|^?:;@]/) ||
+				(!isAheadRegexp && transStrRes[objIndexerPos - 1] === '/') ||
+				statement.slice(objIndexerPos + 2, objIndexerPos + activeIndexerStr.length - 2).match(/[{}\[\]().,+\-*\/\\~!%<>=&|^?:; @]/)
+			) {
+				// 特殊原因，不转换
 			} else {
+				// 右边要不要加点
 				if (transStrRes[objIndexerPos + activeIndexerStr.length].match(/[^{}\[\]().,+\-*\/~!%<>=&|^?:; ]/) != null) {
 					// console.log("√ R", objIndexerPos, activeIndexerStr);
 					rightSplitter = ".";
@@ -558,6 +640,7 @@ function decryptFormat(globalJsArr) {
 				statement = statement.replaceWithStr(objIndexerPos + activeIndexerStr.length - 2, objIndexerPos + activeIndexerStr.length, rightSplitter);
 				transStrRes = transStrRes.replaceWithStr(objIndexerPos + activeIndexerStr.length - 2, objIndexerPos + activeIndexerStr.length, rightSplitter);
 
+				// 左边要不要加点
 				if (transStrRes[objIndexerPos - 1] === "/") {
 					let lastRegExpPos = transStrRes.lastSearchOf(/\/(S)*\//, objIndexerPos);
 					if (lastRegExpPos === -1) {
