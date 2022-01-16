@@ -1,7 +1,7 @@
 /*
 * JsjiamiV6简易解密（作者：NXY666）
 */
-const FILE_NAME = "./template/4.js";
+const FILE_NAME = "./template/7.js";
 
 const fs = require("fs");
 const vm = require("vm");
@@ -287,7 +287,7 @@ function decryptGlobalJs(js) {
 	let decryptor = jsArr[2];
 	let decryptorName = decryptor.slice(decryptor.indexOf("function") + 9, decryptor.indexOf("(")) || decryptor.slice(decryptor.indexOf("var ") + 4, decryptor.indexOf("=function("));
 
-	return jsArr.slice(3, -1).map(function (funcJs) {
+	return jsArr.slice(3).map(function (funcJs) {
 		transStrRes = transStr(funcJs);
 
 		let decryptorPos = Number.POSITIVE_INFINITY;
@@ -345,10 +345,12 @@ function replaceObjFunc(callFunc, callStr) {
 
 	let funcResStr = funcStr.slice(transFuncStr.indexOf("{return ") + 8, transFuncStr.lastIndexOf(";}"));
 	funcParams.forEach(function (param, index) {
+		if (transLayer(callParams[index]).match(/[^=!]=[^=]/)) {
+			callParams[index] = "(" + callParams[index] + ")";
+		}
 		funcResStr = funcResStr.replace(param, callParams[index]);
 	});
 
-	// console.log(funcStr, funcResStr, "\n");
 	return funcResStr;
 }
 function findAndDecryptCodeBlock(jsArr, isShowProgress) {
@@ -460,8 +462,8 @@ function clearDeadCodes(jsArr, isShowProgress) {
 	if (jsArr.length === 1) {
 		// if死代码
 		let transStrRes = transStr(jsArr[0]), transLayerRes = transLayer(jsArr[0]);
-		if (transStrRes.search(/if\('([a-zA-Z]){5}'([=!])?=='([a-zA-Z]){5}'\)/) === 0) {
-			let transFakeIfStr = transLayerRes.match(/if\((Q){17}\){(Q)*}else{(Q)*}/)[0];
+		if (transStrRes.search(/if\('S*'[=!]=='S*'\)/) === 0) {
+			let transFakeIfStr = transLayerRes.match(/if\(Q*\){Q*}else{Q*}/)[0];
 			return clearDeadCodes(splitStatements(simplifyIf(jsArr[0].slice(0, transFakeIfStr.length))));
 		}
 	} else if (jsArr.length === 2) {
@@ -545,9 +547,38 @@ function decryptFormat(globalJsArr) {
 			let activeIndexerStr = transStrRes.slice(objIndexerPos).match(/\['(S)*.']/)[0];
 			let leftSplitter, rightSplitter;
 
-			if (statement.slice(objIndexerPos + 2, objIndexerPos + activeIndexerStr.length - 2).match(/[{}\[\]().,+\-*\/~!%<>=&|^?:; @]/)) {
-				// 包含特殊符号，不转换
+			let isAheadRegexp = (() => {
+				if (transStrRes[objIndexerPos - 1] !== "/") {
+					return false;
+				}
+				let lastRegExpPos = transStrRes.lastSearchOf(/\/(S)*\//, objIndexerPos);
+				if (lastRegExpPos === -1) {
+					return false;
+				} else {
+					let activeRegExpStr = transStrRes.slice(lastRegExpPos).match(/\/(S)*\//)[0];
+					return lastRegExpPos + activeRegExpStr.length === objIndexerPos;
+				}
+			})();
+
+			if ((() => { // 判断前面是不是数字
+					if (!transStrRes[objIndexerPos - 1].match(/[0-9.]/)) {
+						return false;
+					}
+					let pos = objIndexerPos;
+					while (--pos) {
+						if (transStrRes[pos].match(/[0-9.]/)) {
+						} else {
+							return !!transStrRes[pos].match(/[{}\[\]().,+\-*\/~!%<>=&|^?:; @]/);
+						}
+					}
+				})() ||
+				transStrRes[objIndexerPos - 1].match(/[{}\[(,+\-*~!%<>=&|^?:;@]/) ||
+				(!isAheadRegexp && transStrRes[objIndexerPos - 1] === '/') ||
+				statement.slice(objIndexerPos + 2, objIndexerPos + activeIndexerStr.length - 2).match(/[{}\[\]().,+\-*\/\\~!%<>=&|^?:; @]/)
+			) {
+				// 特殊原因，不转换
 			} else {
+				// 右边要不要加点
 				if (transStrRes[objIndexerPos + activeIndexerStr.length].match(/[^{}\[\]().,+\-*\/~!%<>=&|^?:; ]/) != null) {
 					// console.log("√ R", objIndexerPos, activeIndexerStr);
 					rightSplitter = ".";
@@ -558,6 +589,7 @@ function decryptFormat(globalJsArr) {
 				statement = statement.replaceWithStr(objIndexerPos + activeIndexerStr.length - 2, objIndexerPos + activeIndexerStr.length, rightSplitter);
 				transStrRes = transStrRes.replaceWithStr(objIndexerPos + activeIndexerStr.length - 2, objIndexerPos + activeIndexerStr.length, rightSplitter);
 
+				// 左边要不要加点
 				if (transStrRes[objIndexerPos - 1] === "/") {
 					let lastRegExpPos = transStrRes.lastSearchOf(/\/(S)*\//, objIndexerPos);
 					if (lastRegExpPos === -1) {
