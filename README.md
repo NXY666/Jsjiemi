@@ -303,7 +303,8 @@
 
 ## 使用方法
 
-1. 在 [`Decrypt.js`](https://github.com/NXY666/Jsjiemi/blob/master/Decrypt.js) 的常量 `FILE_NAME` 中填写需解密的脚本路径。
+1. 在 [`Decrypt.js`](https://github.com/NXY666/Jsjiemi/blob/master/Decrypt.js) 的常量 `FILE_NAME`
+   中填写需解密的脚本路径。
 2. 运行 [`Decrypt.js`](https://github.com/NXY666/Jsjiemi/blob/master/Decrypt.js) 。
 
 ## 输出结果
@@ -324,5 +325,5 @@
 
 ## 开发进度
 
-- [ ] 识别解密函数而不是直接截取然后运行。
-- [ ] 按需在需解密的嵌套运算中添加括号。
+- [x] 识别解密函数而不是直接截取然后运行。
+- [ ] 修复已知问题。
