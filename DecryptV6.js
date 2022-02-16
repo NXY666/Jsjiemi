@@ -295,9 +295,10 @@ function splitStatements(jsStr, statementType) {
 				} else if ((() => {
 					let matchRes =
 						transLayerRes.slice(startPos).match(/^if\(Q+\){?.*?(;|}|};)(else if\(Q+\){?.*?(;|}|};))*?(else{?.*?(;|}|};))?/) || // if...else
-						transPartJsStr.match(/^(async )?function [^(]+?\(Q*\){Q+};?/) || // function
-						transPartJsStr.match(/^(for|while)\(Q+\){Q+};?/) || // for / while
-						transPartJsStr.match(/^do{?.*?[;}]\(Q+\);?/); // do...while
+						transPartJsStr.match(/^(async )?function [^(]+?\(Q*\){Q+};?/) || // function（花括号不可省略，无需判断）
+						transPartJsStr.match(/^(for|while)\(Q+\){?.*?(;|}|};)/) || // for / while（花括号可省略，需判断）
+						transPartJsStr.match(/^do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
+						transPartJsStr.match(/^try{Q+}catch\(Q+\){Q+};?/); // try...catch（两个花括号都不能省，所以无需判断）
 					return matchRes && (endPos = startPos + matchRes[0].length);
 				})()) {
 					splitJsArr.push(jsStr.slice(startPos, endPos));
