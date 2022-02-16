@@ -1,7 +1,7 @@
 /*
 * JsjiamiV6简易解密（作者：NXY666）
 */
-const FILE_NAME = "./template/14.js";
+const FILE_NAME = "./template/16.js";
 // const FILE_NAME = "./DecryptResult3.js";
 // const FILE_NAME = "d:/111.js";
 
@@ -572,8 +572,7 @@ function replaceObjFunc(callObjName, callFuncName, callStr, ignoreQuoteOutside) 
 		funcResStr = funcResStr.replace(param, callParams[index].replace(/\$/g, "$$$$"));
 	});
 
-	if (funcParams.length === 2 && !ignoreQuoteOutside) {
-		// fs.appendFileSync("res.txt", true);
+	if (funcParams.length === 2 && !transFuncStr.endsWith(");}") && !ignoreQuoteOutside) {
 		return "(" + funcResStr + ")";
 	} else {
 		return funcResStr;
@@ -632,10 +631,18 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 						let transRes = transStr(jsStr);
 						let rightRoundPos = getQuoteEndPos(transRes, rightSquarePos + 1);
 
-						let jsStrBehind = jsStr.slice(0, decryptorPos), jsStrFront = jsStr.slice(rightRoundPos + 1);
+						let jsStrBehind = transStrRes.slice(0, decryptorPos),
+							jsStrFront = transStrRes.slice(rightRoundPos + 1);
 						let ignoreQuoteOutside =
-							(jsStrBehind.endsWith("(") && jsStrFront.startsWith(")")) ||
-							(jsStrBehind.endsWith("return ") && jsStrFront.startsWith(";"));
+							(jsStrBehind.endsWith("(") && jsStrFront.startsWith(")")) || // 在圆括号内优先级必定最高
+							(
+								(
+									jsStrBehind.endsWith("return ") ||
+									jsStrBehind.endsWith(";") ||
+									jsStrBehind.endsWith("{")
+								) && jsStrFront.startsWith(";")
+							) || // 所在的区域周围只有一个运算符
+							(jsStrBehind.endsWith(",") && jsStrFront.startsWith(",")); // 逗号并列表示周围没有其它运算符
 
 						jsStr = jsStr.replaceWithStr(decryptorPos, rightRoundPos + 1, replaceObjFunc(decryptorObjName, jsStr.slice(leftSquarePos + 2, rightSquarePos - 1), jsStr.slice(decryptorPos, rightRoundPos + 1), ignoreQuoteOutside));
 						break;

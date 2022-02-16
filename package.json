@@ -1,6 +1,6 @@
 {
   "name": "DecryptV6",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "A decryptor for JsjiamiV6.",
   "main": "DecryptV6.js",
   "scripts": {
@@ -8,5 +8,5 @@
   },
   "keywords": [],
   "author": "NXY666",
-  "license": "ISC"
+  "license": "NONE"
 }
