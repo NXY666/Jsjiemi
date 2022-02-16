@@ -1,7 +1,7 @@
 /*
 * JS简易解密（作者：NXY666）
 */
-const FILE_NAME = "./template/11.js";
+const FILE_NAME = "./template/14.js";
 // const FILE_NAME = "./DecryptResult3.js";
 // const FILE_NAME = "d:/111.js";
 
@@ -294,14 +294,10 @@ function splitStatements(jsStr, statementType) {
 					startPos += endPos + 1;
 				} else if ((() => {
 					let matchRes =
-						// if...else
-						transLayerRes.slice(startPos).match(/^if\(Q+\){?.*?(;|}|};)(else if\(Q+\){?.*?(;|}|};))*?(else{?.*?(;|}|};))?/) ||
-						// function
-						transPartJsStr.match(/^(async )?function [^(]+?\(Q*\){Q+};?/) ||
-						// for / while
-						transPartJsStr.match(/^(for|while)\(Q+\){Q+};?/) ||
-						// do...while
-						transPartJsStr.match(/^do{?.*?[;}]\(Q+\);?/);
+						transLayerRes.slice(startPos).match(/^if\(Q+\){?.*?(;|}|};)(else if\(Q+\){?.*?(;|}|};))*?(else{?.*?(;|}|};))?/) || // if...else
+						transPartJsStr.match(/^(async )?function [^(]+?\(Q*\){Q+};?/) || // function
+						transPartJsStr.match(/^(for|while)\(Q+\){Q+};?/) || // for / while
+						transPartJsStr.match(/^do{?.*?[;}]\(Q+\);?/); // do...while
 					return matchRes && (endPos = startPos + matchRes[0].length);
 				})()) {
 					splitJsArr.push(jsStr.slice(startPos, endPos));
@@ -366,15 +362,15 @@ function getStatementsType(jsArr) {
 		 * 签名信息
 		 * @namespace signInfo
 		 * @description 用于存放签名以及处理前的解密数据。
-		 * 签名命名规则 [_0-9a-zA-Zｉ$]+?
-		 * 其它变量命名规则 _?[0-9a-zA-Z$]+?
+		 * 签名命名规则 _?[0-9a-zA-Z$ｉＯ]+?
+		 * 变量命名规则 _?[0-9a-zA-Z$]+?
 		 * 字符串规则 'S+?'
 		 * */
 		if (globalDecryptorInfo.signInfo.raw == null) {
-			if (/^var ([_0-9a-zA-Zｉ$]+?='S+?',([_0-9a-zA-Zｉ$]+?_=\['S+?'],)?)?_?[0-9a-zA-Z$]+?=\[[_0-9a-zA-Zｉ$']+?(,'S+?')*?];$/.test(transRes)) {
+			if (/^var (_?[0-9a-zA-Z$ｉＯ]+?='S+?',(_?[0-9a-zA-Z$ｉＯ]+?_=\['S+?'],)?)?_?[0-9a-zA-Z$]+?=\[_?[0-9a-zA-Z$ｉＯ]+?(,'S+?')*?];?/.test(transRes)) {
 				globalDecryptorInfo.signInfo.name = jsStr.slice(4, transRes.indexOf("=", 4));
-				globalDecryptorInfo.signInfo.hasSignString = /^var [_0-9a-zA-Zｉ$]+?='S+?',/.test(transRes);
-				globalDecryptorInfo.signInfo.hasMemberArray = /[_0-9a-zA-Zｉ$]+?_=\['S+?'],/.test(transRes);
+				globalDecryptorInfo.signInfo.hasSignString = /^var _?[0-9a-zA-Z$ｉＯ]+?='S+?',/.test(transRes);
+				globalDecryptorInfo.signInfo.hasMemberArray = /_?[0-9a-zA-Z$ｉＯ]+?_=\['S+?'],/.test(transRes);
 				globalDecryptorInfo.signInfo.raw = jsStr;
 				return {
 					type: "SIGN_INFO",
@@ -429,27 +425,26 @@ function getStatementsType(jsArr) {
 		 * 字符串规则 'S+?'
 		 * */
 		if (globalDecryptorInfo.signInfo.raw != null && globalDecryptorInfo.preprocessFunction.raw != null && globalDecryptorInfo.decryptor.raw == null) {
-
 			if (jsStr.startsWith("function ")) {
 				if (/^function _?[0-9a-zA-Z$]+?\(_?[0-9a-zA-Z$]+?, *_?[0-9a-zA-Z$]+?\){.+?~~'0x'\['concat']\(_?[0-9a-zA-Z$]+?.+?\);.+?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\+\/=.+?\+='%'\+\('00'\+_?[0-9a-zA-Z$]+?\['charCodeAt']\(_?[0-9a-zA-Z$]+?\)\['toString']\(0x10\).+?decodeURIComponent\(_?[0-9a-zA-Z$]+?\);.+?return _?[0-9a-zA-Z$]+?;};?$/.test(jsStr)) {
 					globalDecryptorInfo.decryptor.type = "function";
 					globalDecryptorInfo.decryptor.name = jsStr.slice(9, transRes.indexOf("("));
 					globalDecryptorInfo.decryptor.raw = jsStr;
+					return {
+						type: "DECRYPTOR",
+						content: globalDecryptorInfo.decryptor
+					};
 				}
-				return {
-					type: "DECRYPTOR",
-					content: globalDecryptorInfo.decryptor
-				};
 			} else if (jsStr.startsWith("var ")) {
-				if (/^var _?[0-9a-zA-Z$]+?=function\(_?[0-9a-zA-Z$]+?, *_?[0-9a-zA-Z$]+?\){.+?~~'0x'\['concat']\(_?[0-9a-zA-Z$]+?.+?\);.+?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\+\/=.+?\+='%'\+\('00'\+_?[0-9a-zA-Z$]+?\['charCodeAt']\(_?[0-9a-zA-Z$]+?\)\['toString']\(0x10\).+?decodeURIComponent\(_?[0-9a-zA-Z$]+?\);.+?return _?[0-9a-zA-Z$]+?;};?$/.test(jsStr)) {
+				if (/^var _?[0-9a-zA-Z$]+?=function\(_?[0-9a-zA-Z$]+?, *_?[0-9a-zA-Z$]+?\){.+?~~'0x'\['concat']\(_?[0-9a-zA-Z$]+?.*?\);.+?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\+\/=.+?\+='%'\+\('00'\+_?[0-9a-zA-Z$]+?\['charCodeAt']\(_?[0-9a-zA-Z$]+?\)\['toString']\(0x10\).+?decodeURIComponent\(_?[0-9a-zA-Z$]+?\);.+return _?[0-9a-zA-Z$]+?;?};?$/.test(jsStr)) {
 					globalDecryptorInfo.decryptor.type = "var";
 					globalDecryptorInfo.decryptor.name = jsStr.slice(4, transRes.indexOf("="));
 					globalDecryptorInfo.decryptor.raw = jsStr;
+					return {
+						type: "DECRYPTOR",
+						content: globalDecryptorInfo.decryptor
+					};
 				}
-				return {
-					type: "DECRYPTOR",
-					content: globalDecryptorInfo.decryptor
-				};
 			}
 		}
 
@@ -556,30 +551,33 @@ function getFuncDecryptorName(jsStr) {
 	}
 }
 // 替换掉代码块中所有用加密对象加密过的东西
-function replaceObjFunc(callFunc, callStr) {
-	// console.log("*", callStr);
+function replaceObjFunc(callObjName, callFuncName, callStr, ignoreQuoteOutside) {
+	// 获取解密对象内函数的参数列表
+	let callFunc = virtualEval(callObjName + "['" + callFuncName + "']");
 	let funcStr = callFunc.toString(), transFuncStr = transStr(funcStr);
 	let funcParams = funcStr.slice(transFuncStr.indexOf("(") + 1, transFuncStr.indexOf(")")).splitByOtherStr(transFuncStr.slice(transFuncStr.indexOf("(") + 1, transFuncStr.indexOf(")")), ",");
 
+	// 获取调用解密函数的参数列表
 	let transCallLayer = transLayer(callStr), transCallLayer2 = transLayer(callStr, 2);
-	// console.log("# callStr:", callStr, "\n- transCallLayer:", transCallLayer, "\n- transCallLayer2:", transCallLayer2);
 	let callParamsStr = callStr.slice(transCallLayer.indexOf("(") + 1, transCallLayer.indexOf(")"));
 	let callParams = callParamsStr.splitByOtherStr(transCallLayer2.slice(transCallLayer.indexOf("(") + 1, transCallLayer.indexOf(")")), ",");
-	if (funcParams.length === callParams.length) {
-		// console.log(funcParams, callParams);
-	} else {
-		console.error("×", funcParams, callParams);
+	if (funcParams.length !== callParams.length) {
+		throw new Error(`解密对象函数调用参数数量(${callParams.length})与实际(${funcParams})不符`);
 	}
-
 	let funcResStr = funcStr.slice(transFuncStr.indexOf("{return ") + 8, transFuncStr.lastIndexOf(";}"));
 	funcParams.forEach(function (param, index) {
-		if (transLayer(callParams[index]).match(/[^=!]=[^=]/)) {
-			callParams[index] = "(" + callParams[index] + ")";
-		}
-		funcResStr = funcResStr.replace(param, callParams[index]);
+		// if (transLayer(callParams[index]).match(/[^=!]=[^=]/)) {
+		// 	callParams[index] = "(" + callParams[index] + ")";
+		// }
+		funcResStr = funcResStr.replace(param, callParams[index].replace(/\$/g, "$$$$"));
 	});
 
-	return funcResStr;
+	if (funcParams.length === 2 && !ignoreQuoteOutside) {
+		// fs.appendFileSync("res.txt", true);
+		return "(" + funcResStr + ")";
+	} else {
+		return funcResStr;
+	}
 }
 function findAndDecryptCodeBlock(jsArr, isShowProgress) {
 	return jsArr.map(function (jsStr, progress) {
@@ -631,9 +629,15 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 						break;
 					}
 					case "function": {
-						let transLayerRes = transStr(jsStr);
-						let rightRoundPos = getQuoteEndPos(transLayerRes, rightSquarePos + 1);
-						jsStr = jsStr.replaceWithStr(decryptorPos, rightRoundPos + 1, replaceObjFunc(virtualEval(decryptorObjName + jsStr.slice(leftSquarePos, rightSquarePos + 1)), jsStr.slice(decryptorPos, rightRoundPos + 1)));
+						let transRes = transStr(jsStr);
+						let rightRoundPos = getQuoteEndPos(transRes, rightSquarePos + 1);
+
+						let jsStrBehind = jsStr.slice(0, decryptorPos), jsStrFront = jsStr.slice(rightRoundPos + 1);
+						let ignoreQuoteOutside =
+							(jsStrBehind.endsWith("(") && jsStrFront.startsWith(")")) ||
+							(jsStrBehind.endsWith("return ") && jsStrFront.startsWith(";"));
+
+						jsStr = jsStr.replaceWithStr(decryptorPos, rightRoundPos + 1, replaceObjFunc(decryptorObjName, jsStr.slice(leftSquarePos + 2, rightSquarePos - 1), jsStr.slice(decryptorPos, rightRoundPos + 1), ignoreQuoteOutside));
 						break;
 					}
 				}
@@ -696,20 +700,11 @@ function clearDeadCodes(jsArr, isShowProgress) {
 		}
 	} else if (jsArr.length === 2) {
 		// switch死代码
-		if (
-			/^var (\S*?)='[0-9|]*?'\['split']\('\|'\),(\S*?)=0x0;/.test(jsArr[0]) &&
-			/^while\(true\){switch\((\S*?)\[(\S*?)\+\+]\)/.test(jsArr[1])
-		) {
+		if (/^var (\S*?)='[0-9|]*?'\['split']\('\|'\),(\S*?)=0x0;/.test(jsArr[0]) && /^while\(true\){switch\((\S*?)\[(\S*?)\+\+]\)/.test(jsArr[1])) {
 			let initMatch = jsArr[0].match(/var (\S*?)='[0-9|]*?'\['split']\('\|'\),(\S*?)=0x0;/),
 				whileMatch = jsArr[1].match(/while\(true\){switch\((\S*?)\[(\S*?)\+\+]\)/);
 			let sequence;
-			if ((
-				initMatch && initMatch.length === 3 &&
-				whileMatch && whileMatch.length === 3
-			) && (
-				(sequence = initMatch[1]) === whileMatch[1] &&
-				initMatch[2] === whileMatch[2]
-			)) {
+			if ((initMatch && initMatch.length === 3 && whileMatch && whileMatch.length === 3) && ((sequence = initMatch[1]) === whileMatch[1] && initMatch[2] === whileMatch[2])) {
 				virtualEval(jsArr[0]);
 				let sequenceList = virtualEval(sequence);
 				let caseBlock = jsArr[1].slice(whileMatch[0].length + 1, getQuoteEndPos(jsArr[1], whileMatch[0].length));
@@ -719,18 +714,17 @@ function clearDeadCodes(jsArr, isShowProgress) {
 
 				sequenceList.forEach(function () {
 					let regRes = caseRegexp.exec(transCaseBlock);
-					let startPos = regRes.index + regRes[0].length + 1,
-						endPos = (() => {
-							let casePos = transCaseBlock.indexOf("case'", startPos + 1);
-							let continuePos = transCaseBlock.indexOf("continue;", startPos + 1);
-							if (casePos === -1) {
-								casePos = Number.POSITIVE_INFINITY;
-							}
-							if (continuePos === -1) {
-								continuePos = Number.POSITIVE_INFINITY;
-							}
-							return Math.min(casePos, continuePos);
-						})();
+					let startPos = regRes.index + regRes[0].length + 1, endPos = (() => {
+						let casePos = transCaseBlock.indexOf("case'", startPos + 1);
+						let continuePos = transCaseBlock.indexOf("continue;", startPos + 1);
+						if (casePos === -1) {
+							casePos = Number.POSITIVE_INFINITY;
+						}
+						if (continuePos === -1) {
+							continuePos = Number.POSITIVE_INFINITY;
+						}
+						return Math.min(casePos, continuePos);
+					})();
 					caseList.push(caseBlock.slice(startPos, endPos).replace("continue;", ""));
 				});
 
