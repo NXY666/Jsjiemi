@@ -1,6 +1,6 @@
 {
   "name": "jsjiemi",
-  "version": "2.4.2",
+  "version": "2.5.0",
   "description": "A decryptor for JavaScript.",
   "main": "Decrypt.js",
   "scripts": {
