@@ -678,7 +678,6 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 									jsStrFront.startsWith(")")
 								)
 							); // 逗号并列表示周围没有其它运算符
-						fs.appendFileSync("res.txt", ignoreQuoteOutside + " (" + jsStrBehind + "   " + jsStr.slice(decryptorPos, rightRoundPos + 1) + "   " + jsStrFront + ")\n" + jsStr + "\n" + jsStr.replaceWithStr(decryptorPos, rightRoundPos + 1, replaceObjFunc(decryptorObjName, jsStr.slice(leftSquarePos + 2, rightSquarePos - 1), jsStr.slice(decryptorPos, rightRoundPos + 1), ignoreQuoteOutside)) + "\n\n");
 						jsStr = jsStr.replaceWithStr(decryptorPos, rightRoundPos + 1, replaceObjFunc(decryptorObjName, jsStr.slice(leftSquarePos + 2, rightSquarePos - 1), jsStr.slice(decryptorPos, rightRoundPos + 1), ignoreQuoteOutside));
 						break;
 					}
