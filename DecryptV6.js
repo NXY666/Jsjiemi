@@ -1,9 +1,8 @@
 /*
 * JsjiamiV6简易解密（作者：NXY666）
 */
-const FILE_NAME = "./template/16.js";
+const FILE_NAME = "./template/19.js";
 // const FILE_NAME = "./DecryptResult3.js";
-// const FILE_NAME = "d:/111.js";
 
 const fs = require("fs");
 const vm = require("vm");
@@ -338,13 +337,17 @@ showMsgProgress("解除全局加密");
 const globalDecryptorInfo = {
 	signInfo: {
 		name: null,
+		// _0x / iIl / oO0 / abc
+		confuseType: null,
+		nameRegExp: null,
 		hasSignString: null,
 		hasMemberArray: null,
 		raw: null
 	},
 	preprocessFunction: {
-		// if / function
-		type: null,
+		raw: null
+	},
+	verifyFunction: {
 		raw: null
 	},
 	decryptor: {
@@ -355,8 +358,7 @@ const globalDecryptorInfo = {
 	}
 };
 function getStatementsType(jsArr) {
-	return jsArr.map(function (jsStr) {
-		transLayer(jsStr);
+	return jsArr.map(function (jsStr, index) {
 		let transRes = transStr(jsStr);
 
 		/**
@@ -370,6 +372,23 @@ function getStatementsType(jsArr) {
 		if (globalDecryptorInfo.signInfo.raw == null) {
 			if (/^var (_?[0-9a-zA-Z$ｉＯ]+?='S+?',(_?[0-9a-zA-Z$ｉＯ]+?_=\['S+?'],)?)?_?[0-9a-zA-Z$]+?=\[_?[0-9a-zA-Z$ｉＯ]+?(,'S+?')*?];?/.test(transRes)) {
 				globalDecryptorInfo.signInfo.name = jsStr.slice(4, transRes.indexOf("=", 4));
+				(function (signName) {
+					if (/^_0xod[0-9a-zA-z]$/.test(signName)) {
+						globalDecryptorInfo.signInfo.confuseType = "_0x";
+						globalDecryptorInfo.signInfo.nameRegExp = `_0x[0-9a-f]+`;
+					} else if (/^[iｉl]+$/.test(signName)) {
+						globalDecryptorInfo.signInfo.confuseType = "iIl";
+						globalDecryptorInfo.signInfo.nameRegExp = `[iIl1]+`;
+					} else if (/^[OＯ0$]+$/.test(signName)) {
+						globalDecryptorInfo.signInfo.confuseType = "oO0";
+						globalDecryptorInfo.signInfo.nameRegExp = `[O0Q$]+`;
+					} else if (/^[a-z]+$/.test(signName)) {
+						globalDecryptorInfo.signInfo.confuseType = "abc";
+						globalDecryptorInfo.signInfo.nameRegExp = `[a-z]+`;
+					} else {
+						throw new Error("未知的混淆模式：" + signName);
+					}
+				})(globalDecryptorInfo.signInfo.name);
 				globalDecryptorInfo.signInfo.hasSignString = /^var _?[0-9a-zA-Z$ｉＯ]+?='S+?',/.test(transRes);
 				globalDecryptorInfo.signInfo.hasMemberArray = /_?[0-9a-zA-Z$ｉＯ]+?_=\['S+?'],/.test(transRes);
 				globalDecryptorInfo.signInfo.raw = jsStr;
@@ -391,67 +410,74 @@ function getStatementsType(jsArr) {
 
 		/**
 		 * 预处理函数
-		 * @namespace preprocessFunction
+		 * @namespace globalDecryptorInfo.preprocessFunction
 		 * @description 将签名信息预处理为可用的解密数据。
 		 * 变量命名规则 _?[0-9a-zA-Z$]+?
 		 * 字符串规则 'S+?'
 		 * */
-		if (globalDecryptorInfo.signInfo.raw != null && globalDecryptorInfo.preprocessFunction.raw == null) {
-			if (jsStr.startsWith("(function(")) {
-				if (/^\(function\(_?[0-9a-zA-Z$]+?(, *_?[0-9a-zA-Z$]+?){2}\){var _?[0-9a-zA-Z$]+?=function\(_?[0-9a-zA-Z$]+?(, *_?[0-9a-zA-Z$]+?){4}\){_?[0-9a-zA-Z$]+?=_?[0-9a-zA-Z$]+?>>0x8,_?[0-9a-zA-Z$]+?='po';.+?'shift'.+?'push';.+?while\(--.+?===.+?}else if\(.+?]\/g,''\)===.+?return .+?return .+?}\(_?[0-9a-zA-Z$]+?(, *_?[0-9a-zA-Z$]+?){2}\)\);$/.test(jsStr)) {
-					globalDecryptorInfo.preprocessFunction.type = "function";
-					globalDecryptorInfo.preprocessFunction.raw = jsStr;
-					return {
-						type: "PREPROCESS_FUNCTION",
-						content: globalDecryptorInfo.preprocessFunction
-					};
-				}
-			} else if (jsStr.startsWith("if(function(")) {
-				if (/^if\(function\(_?[0-9a-zA-Z$]+?(, *_?[0-9a-zA-Z$]+?){2}\){function _?[0-9a-zA-Z$]+?\(_?[0-9a-zA-Z$]+?(, *_?[0-9a-zA-Z$]+?){5}\){_?[0-9a-zA-Z$]+?=_?[0-9a-zA-Z$]+?>>0x8,_?[0-9a-zA-Z$]+?='po';.+?'shift'.+?'push'.+?while\(--.+?===.+?}else if\(.+?]\/g,''\)===.+?return .+?return .+?}\(_?[0-9a-zA-Z$]+?(, *_?[0-9a-zA-Z$]+?){2}\),_?[0-9a-zA-Z$]+?\){.+?};?$/.test(jsStr)) {
-					globalDecryptorInfo.preprocessFunction.type = "if";
-					globalDecryptorInfo.preprocessFunction.raw = jsStr;
-					return {
-						type: "PREPROCESS_FUNCTION",
-						content: globalDecryptorInfo.preprocessFunction
-					};
-				}
+		if (globalDecryptorInfo.signInfo.raw != null && globalDecryptorInfo.preprocessFunction.raw == null && index === 1) {
+			if (
+				/\['replace']\(\/\[[a-zA-Z]+=]\/g,''/.test(jsStr) &&
+				/return _?[0-9a-z]+?\(\+\+_?[0-9a-z]+?,_?[0-9a-z]+?\)>>_?[0-9a-z]+?\^_?[0-9a-z]+?;/.test(jsStr) &&
+				/\){while\(--/.test(jsStr)
+			) {
+				globalDecryptorInfo.preprocessFunction.raw = jsStr;
+				return {
+					type: "PREPROCESS_FUNCTION",
+					content: globalDecryptorInfo.preprocessFunction
+				};
 			}
 		}
 
 		/**
 		 * 解密函数
-		 * @namespace decryptor
+		 * @namespace globalDecryptorInfo.decryptor
 		 * @description 使用解密数据完成字符串解密。
 		 * 变量命名规则 _?[0-9a-zA-Z$]+?
 		 * 字符串规则 'S+?'
 		 * */
-		if (globalDecryptorInfo.signInfo.raw != null && globalDecryptorInfo.preprocessFunction.raw != null && globalDecryptorInfo.decryptor.raw == null) {
-			if (jsStr.startsWith("function ")) {
-				if (/^function _?[0-9a-zA-Z$]+?\(_?[0-9a-zA-Z$]+?, *_?[0-9a-zA-Z$]+?\){.+?~~'0x'\['concat']\(_?[0-9a-zA-Z$]+?.+?\);.+?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\+\/=.+?\+='%'\+\('00'\+_?[0-9a-zA-Z$]+?\['charCodeAt']\(_?[0-9a-zA-Z$]+?\)\['toString']\(0x10\).+?decodeURIComponent\(_?[0-9a-zA-Z$]+?\);.+?return _?[0-9a-zA-Z$]+?;};?$/.test(jsStr)) {
-					globalDecryptorInfo.decryptor.type = "function";
-					globalDecryptorInfo.decryptor.name = jsStr.slice(9, transRes.indexOf("("));
-					globalDecryptorInfo.decryptor.raw = jsStr;
-					return {
-						type: "DECRYPTOR",
-						content: globalDecryptorInfo.decryptor
-					};
+		if (globalDecryptorInfo.signInfo.raw != null && globalDecryptorInfo.decryptor.raw == null) {
+			// 必须匹配以下项，否则就不是
+			if (/=~~'0x'\['concat']\(/.test(jsStr)) {
+				let isDecryptor = false;
+				if (globalDecryptorInfo.preprocessFunction.raw != null) {
+					// 有预处理函数
+					if (/='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\+\/=';/.test(jsStr) && /\+='%'\+\('00'\+/.test(jsStr)) {
+						isDecryptor = true;
+					}
+				} else {
+					// 无预处理函数
+					if (index === 1) {
+						isDecryptor = true;
+					}
 				}
-			} else if (jsStr.startsWith("var ")) {
-				if (/^var _?[0-9a-zA-Z$]+?=function\(_?[0-9a-zA-Z$]+?, *_?[0-9a-zA-Z$]+?\){.+?~~'0x'\['concat']\(_?[0-9a-zA-Z$]+?.*?\);.+?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\+\/=.+?\+='%'\+\('00'\+_?[0-9a-zA-Z$]+?\['charCodeAt']\(_?[0-9a-zA-Z$]+?\)\['toString']\(0x10\).+?decodeURIComponent\(_?[0-9a-zA-Z$]+?\);.+return _?[0-9a-zA-Z$]+?;?};?$/.test(jsStr)) {
-					globalDecryptorInfo.decryptor.type = "var";
-					globalDecryptorInfo.decryptor.name = jsStr.slice(4, transRes.indexOf("="));
-					globalDecryptorInfo.decryptor.raw = jsStr;
-					return {
-						type: "DECRYPTOR",
-						content: globalDecryptorInfo.decryptor
-					};
+				if (isDecryptor) {
+					if (jsStr.startsWith("function ")) {
+						globalDecryptorInfo.decryptor.type = "function";
+						globalDecryptorInfo.decryptor.name = jsStr.slice(9, transRes.indexOf("("));
+						globalDecryptorInfo.decryptor.raw = jsStr;
+						return {
+							type: "DECRYPTOR",
+							content: globalDecryptorInfo.decryptor
+						};
+					} else if (jsStr.startsWith("var ")) {
+						globalDecryptorInfo.decryptor.type = "var";
+						globalDecryptorInfo.decryptor.name = jsStr.slice(4, transRes.indexOf("="));
+						globalDecryptorInfo.decryptor.raw = jsStr;
+						return {
+							type: "DECRYPTOR",
+							content: globalDecryptorInfo.decryptor
+						};
+					}
 				}
 			}
 		}
 
+		// TODO 判断验证函数（如今缺少例子）
+
 		/**
 		 * 空语句
-		 * @namespace empty
+		 * @namespace globalDecryptorInfo.empty
 		 * @description 空语句。
 		 * */
 		if (jsStr.trim() === "" || jsStr.trim() === ";") {
@@ -465,7 +491,7 @@ function getStatementsType(jsArr) {
 
 		/**
 		 * 常规语句
-		 * @namespace common
+		 * @namespace globalDecryptorInfo.common
 		 * @description 常规语句。
 		 * */
 		return {
@@ -614,7 +640,7 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 		virtualGlobalEval(jsArr[0]);
 
 		let transStrRes;
-		// TODO 识别是否添加括号（二叉树？）
+		// TODO 识别是否添加括号（二叉树？不！它超出了我的能力范围。）
 		jsArr = jsArr.slice(1).map(function (jsStr) {
 			transStrRes = transStr(jsStr);
 
@@ -632,19 +658,26 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 						let transRes = transStr(jsStr);
 						let rightRoundPos = getQuoteEndPos(transRes, rightSquarePos + 1);
 
-						let jsStrBehind = transStrRes.slice(0, decryptorPos),
-							jsStrFront = transStrRes.slice(rightRoundPos + 1);
+						let jsStrBehind = transRes.slice(0, decryptorPos),
+							jsStrFront = transRes.slice(rightRoundPos + 1);
 						let ignoreQuoteOutside =
-							(jsStrBehind.endsWith("(") && jsStrFront.startsWith(")")) || // 在圆括号内优先级必定最高
 							(
 								(
 									jsStrBehind.endsWith("return ") ||
 									jsStrBehind.endsWith(";") ||
 									jsStrBehind.endsWith("{")
-								) && jsStrFront.startsWith(";")
-							) || // 所在的区域周围只有一个运算符
-							(jsStrBehind.endsWith(",") && jsStrFront.startsWith(",")); // 逗号并列表示周围没有其它运算符
-
+								) && (
+									jsStrFront.startsWith(";")
+								)
+							) || (// 所在的区域周围只有一个运算符
+								(
+									jsStrBehind.endsWith(",") ||
+									jsStrBehind.endsWith("(")
+								) && (
+									jsStrFront.startsWith(",") ||
+									jsStrFront.startsWith(")")
+								)
+							); // 逗号并列表示周围没有其它运算符
 						jsStr = jsStr.replaceWithStr(decryptorPos, rightRoundPos + 1, replaceObjFunc(decryptorObjName, jsStr.slice(leftSquarePos + 2, rightSquarePos - 1), jsStr.slice(decryptorPos, rightRoundPos + 1), ignoreQuoteOutside));
 						break;
 					}
