@@ -881,13 +881,13 @@ function decryptFormat(globalJsArr) {
 		}
 
 		transStrRes = transStr(statement);
-		console.log("trans: ", transStrRes);
+		// console.log("trans: ", transStrRes);
 		let hexCharRes = Number.POSITIVE_INFINITY;
-		console.log("first: ", transStrRes.lastSearchOf(/'S+'/, hexCharRes - 1));
+		// console.log("first: ", transStrRes.lastSearchOf(/'S+'/, hexCharRes - 1));
 		while ((hexCharRes = transStrRes.lastSearchOf(/'S+'/, hexCharRes - 1)) !== -1) {
 			let activeStr = transStrRes.slice(hexCharRes++).match(/'S+'/)[0];
-			console.log("raw: ", transStrRes.slice(hexCharRes - 1, hexCharRes + activeStr.length - 1), statement.slice(hexCharRes - 1, hexCharRes + activeStr.length - 1));
-			console.log("result: ", decodeStr(statement.slice(hexCharRes, hexCharRes + activeStr.length - 2)));
+			// console.log("raw: ", transStrRes.slice(hexCharRes - 1, hexCharRes + activeStr.length - 1), statement.slice(hexCharRes - 1, hexCharRes + activeStr.length - 1));
+			// console.log("result: ", decodeStr(statement.slice(hexCharRes, hexCharRes + activeStr.length - 2)));
 			statement = statement.replaceWithStr(hexCharRes, hexCharRes + activeStr.length - 2, decodeStr(statement.slice(hexCharRes, hexCharRes + activeStr.length - 2)));
 		}
 
