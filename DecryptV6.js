@@ -1,8 +1,8 @@
 /*
 * JsjiamiV6简易解密（作者：NXY666）
 */
-const FILE_NAME = "./template/19.js";
-// const FILE_NAME = "./DecryptResult3.js";
+const FILE_NAME = "./template/20.js";
+// const FILE_NAME = "D:/Projects/DecryptV6/template/source/test.js";
 
 const fs = require("fs");
 const vm = require("vm");
@@ -101,14 +101,14 @@ function transStr(jsStr) {
 				if (signStack.top() === jsArr[nowPos]) {
 					// 结束正则
 					signStack.pop();
+					continue;
 				} else if (signStack.length === 0) {
 					// [{( +-* <>=? &|! ~^
 					if (nowPos === 0 || jsArr[nowPos - 1].match(/[\[{(+\-*<>=?&|!~^;]/)) {
 						// 开始正则
 						signStack.push(jsArr[nowPos]);
 					}
-				} else {
-					jsArr[nowPos] = 'S';
+					continue;
 				}
 				break;
 			case '"':
@@ -117,23 +117,23 @@ function transStr(jsStr) {
 				if (signStack.top() === jsArr[nowPos]) {
 					// 结束字符串
 					signStack.pop();
+					continue;
 				} else if (signStack.length === 0) {
 					// 开始字符串
 					signStack.push(jsArr[nowPos]);
-				} else {
-					jsArr[nowPos] = 'S';
+					continue;
 				}
 				break;
 			case '\\':
 				if (signStack.top() === '"' || signStack.top() === "'" || signStack.top() === '/' || signStack.top() === '`') {
-					jsArr[nowPos++] = jsArr[nowPos] = 'S';
+					jsArr[nowPos++] = 'S';
 				}
 				break;
 			default:
-				if (signStack.top() === '"' || signStack.top() === "'" || signStack.top() === '/' || signStack.top() === '`') {
-					jsArr[nowPos] = 'S';
-				}
 				break;
+		}
+		if (signStack.top() === '"' || signStack.top() === "'" || signStack.top() === '/' || signStack.top() === '`') {
+			jsArr[nowPos] = 'S';
 		}
 	}
 	return jsArr.join("");
@@ -418,7 +418,7 @@ function getStatementsType(jsArr) {
 		if (globalDecryptorInfo.signInfo.raw != null && globalDecryptorInfo.preprocessFunction.raw == null && index === 1) {
 			if (
 				/\['replace']\(\/\[[a-zA-Z]+=]\/g,''/.test(jsStr) &&
-				/return _?[0-9a-z]+?\(\+\+_?[0-9a-z]+?,_?[0-9a-z]+?\)>>_?[0-9a-z]+?\^_?[0-9a-z]+?;/.test(jsStr) &&
+				// /return _?[0-9a-z]+?\(\+\+_?[0-9a-z]+?,_?[0-9a-z]+?\)>>_?[0-9a-z]+?\^_?[0-9a-z]+?;/.test(jsStr) &&
 				/\){while\(--/.test(jsStr)
 			) {
 				globalDecryptorInfo.preprocessFunction.raw = jsStr;
@@ -473,6 +473,18 @@ function getStatementsType(jsArr) {
 			}
 		}
 
+		if (globalDecryptorInfo.signInfo.raw != null && globalDecryptorInfo.preprocessFunction.raw == null && globalDecryptorInfo.decryptor.raw != null) {
+			if (
+				/\['replace']\(\/\[[a-zA-Z]+=]\/g,''/.test(jsStr) &&
+				index === 2
+			) {
+				globalDecryptorInfo.verifyFunction.raw = jsStr;
+				return {
+					type: "VERIFY_FUNCTION",
+					content: globalDecryptorInfo.verifyFunction
+				};
+			}
+		}
 		// TODO 判断验证函数（如今缺少例子）
 
 		/**
@@ -515,17 +527,8 @@ function decryptGlobalJs(js) {
 	let jsArr = splitStatements(js);
 	let statementsTypeArr = getStatementsType(jsArr);
 	if (globalDecryptorInfo.decryptor.raw === null) {
+		// console.log(globalDecryptorInfo);
 		pause("【警告】解密器识别失败，可在GitHub上提交issue以寻找原因。");
-
-		for (let i = 0; i < 3; i++) {
-			virtualGlobalEval(jsArr[i]);
-		}
-
-		globalDecryptorInfo.decryptor.raw = jsArr[2];
-		globalDecryptorInfo.decryptor.name = globalDecryptorInfo.decryptor.raw.slice(globalDecryptorInfo.decryptor.raw.indexOf("function") + 9, globalDecryptorInfo.decryptor.raw.indexOf("(")) || globalDecryptorInfo.decryptor.raw.slice(globalDecryptorInfo.decryptor.raw.indexOf("var ") + 4, globalDecryptorInfo.decryptor.raw.indexOf("=function("));
-
-		jsArr = jsArr.slice(3);
-		statementsTypeArr = statementsTypeArr.slice(3);
 	} else {
 		virtualGlobalEval(globalDecryptorInfo.signInfo.raw);
 		virtualGlobalEval(globalDecryptorInfo.preprocessFunction.raw);
@@ -562,10 +565,8 @@ function getFuncDecryptorName(jsStr) {
 
 	let transStrRes = transLayer(jsStr, 2);
 	let checkRes = transStrRes.slice(transStrRes.indexOf("{") + 1, transStrRes.lastIndexOf("}")).split(",").every(function (objectItem) {
-		let checkRes;
-		if ((checkRes = objectItem.match(/'(S)*':('(S)*'|function\((Q)*\){(Q)*})/))) {
-			return checkRes[0] === objectItem;
-		}
+		let checkRes = objectItem.match(/'(S)*':('(S)*'|function\((Q)*\){(Q)*})/);
+		return checkRes && checkRes[0] === objectItem;
 	});
 	if (checkRes) {
 		// fs.appendFileSync("res.txt", "检查通过:" + jsStr.slice(0, 100) + "\n");
@@ -781,6 +782,9 @@ jsStatementsArr = clearDeadCodes(jsStatementsArr, true);
 fs.writeFileSync("DecryptResult3.js", jsStatementsArr.join("\n"));
 
 showMsgProgress("提升代码可读性");
+function decodeStr(txt) {
+	return eval(`(\`${txt.replace(/`/g, "\\`")}\`)`).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n");
+}
 function decryptFormat(globalJsArr) {
 	return globalJsArr.map(function (statement) {
 		let transStrRes = transStr(statement);
@@ -874,6 +878,17 @@ function decryptFormat(globalJsArr) {
 				statement = statement.replaceWithStr(objIndexerPos, objIndexerPos + 2, leftSplitter);
 				transStrRes = transStrRes.replaceWithStr(objIndexerPos, objIndexerPos + 2, leftSplitter);
 			}
+		}
+
+		transStrRes = transStr(statement);
+		console.log("trans: ", transStrRes);
+		let hexCharRes = Number.POSITIVE_INFINITY;
+		console.log("first: ", transStrRes.lastSearchOf(/'S+'/, hexCharRes - 1));
+		while ((hexCharRes = transStrRes.lastSearchOf(/'S+'/, hexCharRes - 1)) !== -1) {
+			let activeStr = transStrRes.slice(hexCharRes++).match(/'S+'/)[0];
+			console.log("raw: ", transStrRes.slice(hexCharRes - 1, hexCharRes + activeStr.length - 1), statement.slice(hexCharRes - 1, hexCharRes + activeStr.length - 1));
+			console.log("result: ", decodeStr(statement.slice(hexCharRes, hexCharRes + activeStr.length - 2)));
+			statement = statement.replaceWithStr(hexCharRes, hexCharRes + activeStr.length - 2, decodeStr(statement.slice(hexCharRes, hexCharRes + activeStr.length - 2)));
 		}
 
 		return statement;
