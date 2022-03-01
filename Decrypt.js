@@ -1,7 +1,7 @@
 /*
 * JS简易解密（作者：NXY666）
 */
-const FILE_NAME = "./template/20.js";
+const FILE_NAME = "./template/23.js";
 // const FILE_NAME = "D:/Projects/Decrypt/template/source/test.js";
 
 const fs = require("fs");
@@ -821,7 +821,6 @@ function decryptFormat(globalJsArr) {
 					return lastRegExpPos + activeRegExpStr.length === objIndexerPos;
 				}
 			})();
-
 			if ((() => { // 判断前面是不是数字
 					if (!transStrRes[objIndexerPos - 1].match(/[0-9.]/)) {
 						return false;
@@ -837,7 +836,8 @@ function decryptFormat(globalJsArr) {
 				transStrRes[objIndexerPos - 1].match(/[{}\[(,+\-*~!%<>=&|^?:;@]/) ||
 				transStrRes[objIndexerPos + activeIndexerStr.length].match(/[`'"]/) ||
 				(!isAheadRegexp && transStrRes[objIndexerPos - 1] === '/') ||
-				statement.slice(objIndexerPos + 2, objIndexerPos + activeIndexerStr.length - 2).match(/[{}\[\]().,+\-*\/\\~!%<>=&|^?:; @]/)
+				statement.slice(objIndexerPos + 2, objIndexerPos + activeIndexerStr.length - 2).match(/[{}\[\]().,+\-*\/\\~!%<>=&|^?:; @]/) ||
+				statement[objIndexerPos + 2].match(/[0-9]/)
 			) {
 				// 特殊原因，不转换
 			} else {
