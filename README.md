@@ -8,8 +8,8 @@
 
 > Gitee仓库为Github的同步仓库，更新可能会有延迟。
 
-*  Github仓库：https://github.com/NXY666/JsjiamiV6-Decryptor.git
-*  Gitee仓库：https://gitee.com/NXY666/JsjiamiV6-Decryptor.git
+* Github仓库：https://github.com/NXY666/JsjiamiV6-Decryptor.git
+* Gitee仓库：https://gitee.com/NXY666/JsjiamiV6-Decryptor.git
 
 ## 解密效果
 
@@ -328,9 +328,8 @@
 
 ## 已知问题
 
-- [x] 去除加密对象出现嵌套运算时不合理添加括号导致运算顺序出错的问题。
-- [x] 死代码和加密对象嵌套出现导致解密不完全的问题。
-- [ ] 索引器内字符串为数字开头仍转换为“.xxx.”的问题。
+- [x] 索引器内字符串为数字开头仍转换为“.xxx.”的问题。
+- [ ] 代码块内有格式化验证函数，在加密对象之前，阻挡了加密对象识别。
 
 ## 开发计划
 
@@ -339,3 +338,4 @@
 - [ ] 修复已知问题。
 - [ ] 支持清除残留注释。
 - [ ] 提供简易的格式化功能。
+- [ ] 当数字处于位运算符周围时，保持十六进制
