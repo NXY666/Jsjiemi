@@ -1,7 +1,7 @@
 /*
 * JS简易解密（作者：NXY666）
 */
-const FILE_NAME = "./template/23.js";
+const FILE_NAME = "./template/7.js";
 // const FILE_NAME = "D:/Projects/Decrypt/template/source/test.js";
 
 const fs = require("fs");
@@ -473,6 +473,13 @@ function getStatementsType(jsArr) {
 			}
 		}
 
+		/**
+		 * 验证函数
+		 * @namespace globalDecryptorInfo.verifyFunction
+		 * @description 验证解密数据是否被修改，并去掉头尾多余内容。
+		 * 变量命名规则 _?[0-9a-zA-Z$]+?
+		 * 字符串规则 'S+?'
+		 * */
 		if (globalDecryptorInfo.signInfo.raw != null && globalDecryptorInfo.preprocessFunction.raw == null && globalDecryptorInfo.decryptor.raw != null) {
 			if (
 				/\['replace']\(\/\[[a-zA-Z]+=]\/g,''/.test(jsStr) &&
@@ -485,7 +492,6 @@ function getStatementsType(jsArr) {
 				};
 			}
 		}
-		// TODO 判断验证函数（如今缺少例子）
 
 		/**
 		 * 空语句
@@ -527,14 +533,18 @@ function decryptGlobalJs(js) {
 	let jsArr = splitStatements(js);
 	let statementsTypeArr = getStatementsType(jsArr);
 	if (globalDecryptorInfo.decryptor.raw === null) {
-		// console.log(globalDecryptorInfo);
 		pause("【警告】解密器识别失败，可在GitHub上提交issue以寻找原因。");
 	} else {
+		if (globalDecryptorInfo.preprocessFunction.raw === null && globalDecryptorInfo.verifyFunction.raw === null) {
+			pause("【警告】已发现解密器，但未发现其对应的预处理函数和验证函数，可能无法正常运行。可在GitHub上提交issue以寻找原因。");
+		}
 		virtualGlobalEval(globalDecryptorInfo.signInfo.raw);
 		virtualGlobalEval(globalDecryptorInfo.preprocessFunction.raw);
 		virtualGlobalEval(globalDecryptorInfo.decryptor.raw);
+		virtualGlobalEval(globalDecryptorInfo.verifyFunction.raw);
 	}
 	return jsArr.filter(function (jsStr, index) {
+		// console.log(statementsTypeArr[index].type);
 		return statementsTypeArr[index].type === "COMMON";
 	}).map(function (funcJs) {
 		transStrRes = transStr(funcJs);
@@ -791,10 +801,15 @@ function decryptFormat(globalJsArr) {
 		let hexNumberPos = Number.POSITIVE_INFINITY;
 		while ((hexNumberPos = transStrRes.lastSearchOf(/0x([0-9a-fA-F])*/, hexNumberPos - 1)) !== -1) {
 			let activeNumStr = transStrRes.slice(hexNumberPos).match(/0x([0-9a-fA-F])*/)[0];
-			let checkNumberRegexp = /[{}\[\]().,+\-*\/~!%<>=&|^?:; ]/;
+			// ^~是位运算符，此处排除
+			let checkNumberRegexp = /[{}\[\]().,+\-*\/!<>%=&|?:; ]/;
 			if (
 				transStrRes[hexNumberPos - 1].match(checkNumberRegexp) != null &&
-				transStrRes[hexNumberPos + activeNumStr.length].match(checkNumberRegexp) != null
+				(transStrRes[hexNumberPos - 1].match(/[&|]/) == null || transStrRes[hexNumberPos - 1] === transStrRes[hexNumberPos - 2]) &&
+				(transStrRes[hexNumberPos - 1].match(/[<>]/) == null || transStrRes[hexNumberPos - 1] !== transStrRes[hexNumberPos - 2]) &&
+				transStrRes[hexNumberPos + activeNumStr.length].match(checkNumberRegexp) != null &&
+				(transStrRes[hexNumberPos + activeNumStr.length].match(/[&|]/) == null || transStrRes[hexNumberPos + activeNumStr.length] === transStrRes[hexNumberPos + activeNumStr.length + 1]) &&
+				(transStrRes[hexNumberPos + activeNumStr.length].match(/[<>]/) == null || transStrRes[hexNumberPos + activeNumStr.length] !== transStrRes[hexNumberPos + activeNumStr.length + 1])
 			) {
 				// console.log("√", hexNumberPos, activeNumStr);
 				statement = statement.replaceWithStr(hexNumberPos, hexNumberPos + activeNumStr.length, parseInt(activeNumStr, 16));
