@@ -1,8 +1,7 @@
 /*
 * JsjiamiV6简易解密（作者：NXY666）
 */
-const FILE_NAME = "./template/7.js";
-// const FILE_NAME = "D:/Projects/DecryptV6/template/source/test.js";
+const FILE_NAME = "./template/15.js";
 
 const fs = require("fs");
 const vm = require("vm");
@@ -259,13 +258,13 @@ function splitStatements(jsStr, statementType) {
 	let transLayerRes = transLayer(jsStr), splitJsArr = [];
 	if (statementType === undefined) {
 		let tmpStr = transLayerRes.replace(/([0-9a-zA-Z])+/g, "W");
-		if (tmpStr === "") {
+		if (tmpStr === "" || tmpStr === ";") {
 			// 空
 			statementType = "EMPTY";
 		} else if (/^([^,:;]+:[^,:;]+,)*[^,:;]+:[^,:;]+$/.test(tmpStr)) {
 			// 对象
 			statementType = "OBJECT";
-		} else if (/^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~]|defalut:)/.test(transLayerRes.slice(0, 8))) {
+		} else if (/^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~ ]|default:)/.test(transLayerRes.slice(0, 8))) {
 			// case
 			statementType = "SWITCH_CASE";
 		} else {
@@ -282,22 +281,26 @@ function splitStatements(jsStr, statementType) {
 		}
 		case "SWITCH_CASE":
 		case "COMMON": {
-			let startPos = 0, endPos;
-			while ((endPos = transLayerRes.indexOf(";", startPos)) !== -1) {
+			let startPos = 0, endPos = transLayerRes.indexOf(";", startPos);
+			if (endPos === -1) {
+				endPos = Number.POSITIVE_INFINITY;
+			}
+			do {
 				let partJsStr = jsStr.slice(startPos, endPos + 1),
 					transPartJsStr = transLayerRes.slice(startPos, endPos + 1);
-				if (statementType === "SWITCH_CASE" && /^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~]|defalut:)/.test(transPartJsStr.slice(0, 8))) {
+				if (statementType === "SWITCH_CASE" && /^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~ ]|(default:))/.test(transPartJsStr.slice(0, 8))) {
 					// switch...case
 					endPos = transPartJsStr.indexOf(":");
 					splitJsArr.push(partJsStr.slice(0, endPos + 1));
 					startPos += endPos + 1;
 				} else if ((() => {
 					let matchRes =
-						transLayerRes.slice(startPos).match(/^if\(Q+\){?.*?(;|}|};)(else if\(Q+\){?.*?(;|}|};))*?(else{?.*?(;|}|};))?/) || // if...else
-						transPartJsStr.match(/^(async )?function [^(]+?\(Q*\){Q+};?/) || // function（花括号不可省略，无需判断）
-						transPartJsStr.match(/^(for|while)\(Q+\){?.*?(;|}|};)/) || // for / while（花括号可省略，需判断）
+						transLayerRes.slice(startPos).match(/^if\(Q+\){?.*?(};|;|})(else if\(Q+\){?.*?(};|;|}))*(else{?.*?(};|;|}))?/) || // if...else
+						transPartJsStr.match(/^(async )?function [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
+						transPartJsStr.match(/^(for|while)\(Q+\){?.*?(};|;|})/) || // for / while（花括号可省略，需判断）
 						transPartJsStr.match(/^do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
-						transPartJsStr.match(/^try{Q+}catch\(Q+\){Q+};?/); // try...catch（两个花括号都不能省，所以无需判断）
+						transPartJsStr.match(/^try{Q+}catch\(Q+\){Q*};?/) || // try...catch（两个花括号都不能省，所以无需判断）
+						transPartJsStr.match(/^switch\(Q+\){Q*};?/); // switch（两个花括号都不能省，所以无需判断）
 					return matchRes && (endPos = startPos + matchRes[0].length);
 				})()) {
 					splitJsArr.push(jsStr.slice(startPos, endPos));
@@ -307,7 +310,7 @@ function splitStatements(jsStr, statementType) {
 					splitJsArr.push(jsStr.slice(startPos, endPos + 1));
 					startPos = endPos + 1;
 				}
-			}
+			} while ((endPos = transLayerRes.indexOf(";", startPos)) !== -1);
 			if (startPos < jsStr.length) {
 				splitJsArr.push(jsStr.slice(startPos));
 			}
@@ -317,7 +320,7 @@ function splitStatements(jsStr, statementType) {
 			throw "未知的代码块类型 " + statementType;
 		}
 	}
-	splitJsArr["type"] = statementType;
+	splitJsArr.type = statementType;
 	return splitJsArr;
 }
 /**
@@ -558,7 +561,7 @@ function decryptGlobalJs(js) {
 		return funcJs;
 	});
 }
-let js = fs.readFileSync(FILE_NAME).toString();
+let js = fs.readFileSync(FILE_NAME).toString().trim();
 jsStatementsArr = decryptGlobalJs(js);
 // jsStatementsArr = splitStatements(js);
 fs.writeFileSync("DecryptResult1.js", jsStatementsArr.join("\n"));
@@ -673,22 +676,28 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 							jsStrFront = transRes.slice(rightRoundPos + 1);
 						let ignoreQuoteOutside =
 							(
-								(
+								( // 所在的区域周围只有一个运算符
 									jsStrBehind.endsWith("return ") ||
 									jsStrBehind.endsWith(";") ||
 									jsStrBehind.endsWith("{")
 								) && (
 									jsStrFront.startsWith(";")
 								)
-							) || (// 所在的区域周围只有一个运算符
-								(
+							) || (
+								( // 逗号并列表示周围没有其它运算符
 									jsStrBehind.endsWith(",") ||
 									jsStrBehind.endsWith("(")
 								) && (
 									jsStrFront.startsWith(",") ||
 									jsStrFront.startsWith(")")
 								)
-							); // 逗号并列表示周围没有其它运算符
+							) || (
+								( // 所在的区域周围只有一个运算符
+									jsStrBehind.endsWith("[")
+								) && (
+									jsStrFront.startsWith("]")
+								)
+							);
 						jsStr = jsStr.replaceWithStr(decryptorPos, rightRoundPos + 1, replaceObjFunc(decryptorObjName, jsStr.slice(leftSquarePos + 2, rightSquarePos - 1), jsStr.slice(decryptorPos, rightRoundPos + 1), ignoreQuoteOutside));
 						break;
 					}
@@ -911,6 +920,61 @@ function decryptFormat(globalJsArr) {
 }
 jsStatementsArr = decryptFormat(jsStatementsArr);
 fs.writeFileSync("DecryptResult4.js", jsStatementsArr.join("\n"));
+
+showMsgProgress("格式化代码");
+function findAndFormatCodeBlock(jsArr, layer, isShowProgress) {
+	return jsArr.map(function (jsStr, progress) {
+		// 特殊情况会在前面添加前缀
+		let prefixCount = 0;
+		if (jsStr[0] === "\t") {
+			prefixCount = layer - /^\t+/.test(jsStr).toString().length + 1;
+		}
+
+		let transLayerRes = transLayer(jsStr);
+		let startPos = Number.POSITIVE_INFINITY;
+		while ((startPos === Number.POSITIVE_INFINITY || startPos - 1 >= 0) && (startPos = Math.max(
+			transLayerRes.lastIndexOf("{", startPos - 1),
+			transLayerRes.lastIndexOf("(", startPos - 1),
+			transLayerRes.lastIndexOf("[", startPos - 1)
+		)) !== -1) {
+			let endPos = getQuoteEndPos(jsStr, startPos);
+			if (jsStr[startPos] === "{") {
+				// 拆分代码并顺便清理空语句
+				let splitStatementsRes = splitStatements(jsStr.slice(startPos + 1, endPos)).filter(function (statement) {
+					return statement !== ";";
+				});
+				if (splitStatementsRes.length) {
+					let isCaseBlock = /^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~ ]|default:)/.test(transStr(splitStatementsRes[0]).slice(0, 8));
+					let padTabs = "\n" + "".padEnd(layer + prefixCount, "\t");
+					if (isCaseBlock) {
+						splitStatementsRes = splitStatementsRes.map(function (statement) {
+							if (!/^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~ ]|default:)/.test(transStr(statement).slice(0, 8))) {
+								return "\t" + statement;
+							} else {
+								return statement;
+							}
+						});
+					}
+					jsStr = jsStr.replaceWithStr(startPos + 1, endPos, padTabs + formatCodeBlockArr(splitStatementsRes, layer + 1).join(padTabs) + padTabs.slice(0, -1));
+				}
+				continue;
+			}
+			jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndFormatCodeBlock([jsStr.slice(startPos + 1, endPos)], layer).join("\n" + "".padEnd(layer, "\t")));
+		}
+		if (isShowProgress) {
+			showNumProgress("格式化代码", progress + 1, jsArr.length);
+		}
+		return jsStr;
+	});
+}
+function formatCodeBlockArr(jsArr, layer, isShowProgress) {
+	if (isShowProgress) {
+		showNumProgress("格式化代码", layer, jsArr.length);
+	}
+	return findAndFormatCodeBlock(jsArr, layer, isShowProgress);
+}
+jsStatementsArr = formatCodeBlockArr(jsStatementsArr, 1, true);
+fs.writeFileSync("DecryptResult5.js", jsStatementsArr.join("\n"));
 
 const END_TIME = new Date().getTime();
 
