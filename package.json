@@ -1,12 +1,12 @@
 {
-  "name": "jsjiemi",
-  "version": "2.6.2",
-  "description": "A decryptor for JavaScript.",
-  "main": "Decrypt.js",
-  "scripts": {
+	"name": "jsjiemi",
+	"version": "2.7.0",
+	"description": "A decryptor for JavaScript.",
+	"main": "Decrypt.js",
+	"scripts": {
     "decrypt": "node Decrypt.js"
-  },
-  "keywords": [],
-  "author": "NXY666",
-  "license": "AGPL-3.0"
+	},
+	"keywords": ["javascript", "decryptor", "jsjiemi"],
+	"author": "NXY666",
+	"license": "AGPL-3.0"
 }
