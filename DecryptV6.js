@@ -1,10 +1,12 @@
 /*
 * JsjiamiV6简易解密（作者：NXY666）
 */
-const FILE_NAME = "./template/15.js";
+const FILE_NAME = "./template/7.js";
 
 const fs = require("fs");
 const vm = require("vm");
+const readline = require("readline");
+const Path = require("path");
 
 Array.prototype.top = function () {
 	return this[this.length - 1];
@@ -64,30 +66,171 @@ String.prototype.lastSearchOf = function (regexp, position) {
 /**
  * 日志工具
  * */
-function showMsgProgress(msg) {
-	console.clear();
-	console.warn(`* 正在${msg}……`);
-}
-function showNumProgress(msg, nowProgress, maxProgress) {
-	let percent = Math.floor(nowProgress / maxProgress * 50);
-	let progressArr = [];
-	for (let i = 0; i < 50; i++) {
-		if (i < percent) {
-			progressArr.push("▇");
-		} else {
-			progressArr.push(" ");
-		}
+const Logger = (function () {
+	function Logger(options) {
+		options = options || {};
+		this.mergeOptions(this._options, options);
+		console.clear();
 	}
-	console.clear();
-	console.warn(`* 正在${msg}…… [${progressArr.join("")}] ${(nowProgress / maxProgress * 100).toFixed(1).padStart(5, " ")}%`);
-}
+
+	Logger.prototype._options = {
+		// 进度选项
+		logOptions: {},
+		// 进度选项
+		progressOptions: {
+			length: 50,
+			frequency: 100,
+			emptyStr: " ",
+			fullStr: "="
+		}
+	};
+	Logger.prototype._data = {
+		// 日志数据
+		log: {
+			content: null,
+			lastTime: 0,
+			line: 0,
+			lastContentLines: 0
+		},
+		// 进度数据
+		progress: {
+			enabled: false,
+			determine: false,
+			finished: false,
+			max: 100,
+			now: 0
+		}
+	};
+
+	Logger.prototype.mergeOptions = function (targetOption, newOption) {
+		if (!newOption) {
+			return targetOption;
+		}
+		Object.keys(targetOption).forEach(function (key) {
+			if (newOption[key] === undefined) {
+				return;
+			}
+			if (typeof targetOption[key] != "object" || Array.isArray(targetOption[key])) {
+				targetOption[key] = newOption[key];
+			} else {
+				targetOption[key] = this.mergeOptions(targetOption[key], newOption[key]);
+			}
+		}.bind(this));
+		return targetOption;
+	};
+
+	Logger.prototype.weakUpdate = function () {
+		this.updateConsole();
+	};
+	Logger.prototype.updateConsole = function (forceOutput, nextLine) {
+		// 检查更新是否过于频繁
+		if (!forceOutput && new Date().getTime() - this._data.log.lastTime < this._options.progressOptions.frequency) {
+			return;
+		} else {
+			this._data.log.lastTime = new Date().getTime();
+		}
+
+		// 日志进度
+		let now, max, length, percent;
+		let progressArr = [], progressStr = "";
+		if (this._data.progress.enabled) {
+			now = this._data.progress.now;
+			max = this._data.progress.max;
+			if (now > max) {
+				now = max;
+			}
+			progressArr.length = length = this._options.progressOptions.length;
+			if (this._data.progress.determine) {
+				percent = Math.floor(now / max * length);
+				progressArr.fill(this._options.progressOptions.fullStr, 0, percent);
+				progressArr.fill(this._options.progressOptions.emptyStr, percent, length);
+				progressStr = `[${progressArr.join("")}] ${(now / max * 100).toFixed(1).padStart(5, " ")}%`;
+			} else {
+				if (this._data.progress.finished) {
+					progressArr.fill(this._options.progressOptions.fullStr, 0, length);
+					progressStr = `[${progressArr.join("")}]`;
+				} else {
+					let progressBarStart = now % length,
+						progressBarEnd = progressBarStart + length / 5;
+					progressArr.fill(this._options.progressOptions.emptyStr, 0, length);
+					progressArr.fill(this._options.progressOptions.fullStr, progressBarStart, progressBarEnd);
+					let exceed = progressBarEnd - length;
+					if (exceed > 0) {
+						progressArr.fill(this._options.progressOptions.fullStr, 0, exceed);
+					}
+					progressStr = `[${progressArr.join("")}]`;
+					this._data.progress.now++;
+				}
+			}
+		}
+
+		// 拼装内容和进度
+		let outputStr = `* ${this._data.log.content} ${progressStr}`;
+
+		// 写入日志
+		if (!nextLine) {
+			readline.cursorTo(process.stdout, 0, this._data.log.line);
+		} else {
+			this._data.log.line += this._data.log.lastContentLines;
+		}
+		let lastContentLines = this._data.log.lastContentLines;
+		this._data.log.lastContentLines = outputStr.split("\n").map(function (line) {
+			console.info(line);
+		}).length;
+		if (lastContentLines > this._data.log.lastContentLines) {
+			for (let i = lastContentLines - this._data.log.lastContentLines; i > 0; i--) {
+				console.info("\n");
+			}
+		}
+	};
+
+	Logger.prototype.logWithProgress = function (content, now, max) {
+		let logChanged = this._data.log.content !== null && this._data.log.content !== content;
+		if (logChanged && !this._data.progress.determine) {
+			this.logWithoutDetermineFinished();
+		}
+		this._data.log.content = content;
+		this._data.progress.enabled = true;
+		this._data.progress.determine = true;
+		this._data.progress.now = now;
+		this._data.progress.max = max;
+		this.updateConsole(true, logChanged);
+	};
+	Logger.prototype.logWithoutDetermine = function (content) {
+		let logChanged = this._data.log.content !== null && this._data.log.content !== content;
+		if (logChanged && !this._data.progress.determine) {
+			this.logWithoutDetermineFinished();
+		}
+		this._data.log.content = content;
+		this._data.progress.enabled = true;
+		this._data.progress.determine = false;
+		this._data.progress.finished = false;
+		this._data.progress.now = 0;
+		this._data.progress.max = Number.POSITIVE_INFINITY;
+		this.updateConsole(true, logChanged);
+	};
+	Logger.prototype.logWithoutDetermineFinished = function () {
+		this._data.progress.finished = true;
+		this.updateConsole(true);
+	};
+	Logger.prototype.logWithoutProgress = function (content) {
+		let logChanged = this._data.log.content !== null && this._data.log.content !== content;
+		if (logChanged && !this._data.progress.determine) {
+			this.logWithoutDetermineFinished();
+		}
+		this._data.log.content = content;
+		this._data.progress.enabled = false;
+		this.updateConsole(true, logChanged);
+	};
+	return Logger;
+})();
 function pause(text) {
-	console.warn(`${text}${text !== undefined ? "\n" : ""}[请按任意键继续]`);
+	console.warn(`${text !== undefined ? text + "\n" : ""}[请按任意键继续]`);
 	let stopTime = new Date().getTime();
 	process.stdin.setRawMode(true);
 	fs.readSync(0, Buffer.alloc(1), 0, 1, null);
 	process.stdin.setRawMode(false);
-	START_TIME += new Date().getTime() - stopTime;
+	PAUSE_TIME += new Date().getTime() - stopTime;
 }
 /**
  * 代码分析工具
@@ -288,18 +431,36 @@ function splitStatements(jsStr, statementType) {
 			do {
 				let partJsStr = jsStr.slice(startPos, endPos + 1),
 					transPartJsStr = transLayerRes.slice(startPos, endPos + 1);
-				if (statementType === "SWITCH_CASE" && /^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~ ]|(default:))/.test(transPartJsStr.slice(0, 8))) {
-					// switch...case
-					endPos = transPartJsStr.indexOf(":");
-					splitJsArr.push(partJsStr.slice(0, endPos + 1));
-					startPos += endPos + 1;
+				if (statementType === "SWITCH_CASE") {
+					if (/^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~ ]|(default:))/.test(transPartJsStr.slice(0, 8))) {
+						// switch...case
+						endPos = transPartJsStr.indexOf(":");
+						splitJsArr.push(partJsStr.slice(0, endPos + 1));
+						startPos += endPos + 1;
+					} else if ((() => {
+						let matchRes =
+							transLayerRes.slice(startPos).match(/^if\(Q+\){?.*?(};|;|})(else if\(Q+\){?.*?(};|;|}))*(else{?.*?(};|;|}))?/) || // if...else
+							transPartJsStr.match(/^(async )?function [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
+							transPartJsStr.match(/^(for|while)\(Q+\){?.*?(};|;|})/) || // for / while（花括号可省略，需判断）
+							transPartJsStr.match(/^do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
+							transPartJsStr.match(/^try{Q*}catch\(Q+\){Q*};?/) || // try...catch（两个花括号都不能省，所以无需判断）
+							transPartJsStr.match(/^switch\(Q+\){Q*};?/); // switch（两个花括号都不能省，所以无需判断）
+						return matchRes && (endPos = startPos + matchRes[0].length);
+					})()) {
+						splitJsArr.push(jsStr.slice(startPos, endPos));
+						startPos = endPos;
+					} else {
+						// 其它
+						splitJsArr.push(jsStr.slice(startPos, endPos + 1));
+						startPos = endPos + 1;
+					}
 				} else if ((() => {
 					let matchRes =
 						transLayerRes.slice(startPos).match(/^if\(Q+\){?.*?(};|;|})(else if\(Q+\){?.*?(};|;|}))*(else{?.*?(};|;|}))?/) || // if...else
 						transPartJsStr.match(/^(async )?function [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
 						transPartJsStr.match(/^(for|while)\(Q+\){?.*?(};|;|})/) || // for / while（花括号可省略，需判断）
 						transPartJsStr.match(/^do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
-						transPartJsStr.match(/^try{Q+}catch\(Q+\){Q*};?/) || // try...catch（两个花括号都不能省，所以无需判断）
+						transPartJsStr.match(/^try{Q*}catch\(Q+\){Q*};?/) || // try...catch（两个花括号都不能省，所以无需判断）
 						transPartJsStr.match(/^switch\(Q+\){Q*};?/); // switch（两个花括号都不能省，所以无需判断）
 					return matchRes && (endPos = startPos + matchRes[0].length);
 				})()) {
@@ -334,9 +495,21 @@ function virtualGlobalEval(jsStr) {
 	return vm.runInContext(jsStr, globalContext);
 }
 
-let START_TIME = new Date().getTime();
+// 开始计时
+let START_TIMESTAMP = new Date().getTime(), PAUSE_TIME = 0;
 
-showMsgProgress("解除全局加密");
+// 初始化日志工具并确认文件路径
+let logger = new Logger({});
+logger.logWithoutProgress("JsjiamiV6 Decryptor");
+let absolutePathStr = Path.resolve(FILE_NAME);
+let absolutePathObj = Path.parse(absolutePathStr);
+logger.logWithoutProgress("解密文件：" + absolutePathStr);
+logger.logWithoutProgress("输出目录：" + absolutePathObj.dir);
+pause();
+
+let js = fs.readFileSync(absolutePathStr).toString().trim() + ";";
+
+logger.logWithoutDetermine("解除全局加密");
 const globalDecryptorInfo = {
 	signInfo: {
 		name: null,
@@ -527,6 +700,7 @@ function decryptGlobalJs(js) {
 	let transStrRes = transStr(js);
 	let boolMarkPos = Number.POSITIVE_INFINITY;
 	while ((boolMarkPos === Number.POSITIVE_INFINITY || boolMarkPos - 1 >= 0) && (boolMarkPos = transStrRes.lastIndexOf("![]", boolMarkPos - 1)) !== -1) {
+		logger.weakUpdate();
 		if (transStrRes[boolMarkPos - 1] === "!") {
 			js = js.replaceWithStr(boolMarkPos - 1, boolMarkPos + 3, ((transStrRes[boolMarkPos - 2].match(/[{}\[\]().,+\-*\/~!%<>=&|^?:; @]/) ? "" : " ")) + "true");
 		} else {
@@ -550,10 +724,12 @@ function decryptGlobalJs(js) {
 		// console.log(statementsTypeArr[index].type);
 		return statementsTypeArr[index].type === "COMMON";
 	}).map(function (funcJs) {
+		logger.weakUpdate();
 		transStrRes = transStr(funcJs);
 
 		let decryptorPos = Number.POSITIVE_INFINITY;
 		while ((decryptorPos === Number.POSITIVE_INFINITY || decryptorPos - 1 >= 0) && (decryptorPos = transStrRes.lastIndexOf(`${globalDecryptorInfo.decryptor.name}('`, decryptorPos - 1)) !== -1) {
+			logger.weakUpdate();
 			let endPos = transStrRes.indexOf(")", decryptorPos);
 			funcJs = funcJs.replaceWithStr(decryptorPos, endPos + 1, escapeEvalStr(virtualEval(funcJs.slice(decryptorPos, endPos + 1))));
 		}
@@ -561,12 +737,10 @@ function decryptGlobalJs(js) {
 		return funcJs;
 	});
 }
-let js = fs.readFileSync(FILE_NAME).toString().trim();
 jsStatementsArr = decryptGlobalJs(js);
-// jsStatementsArr = splitStatements(js);
 fs.writeFileSync("DecryptResult1.js", jsStatementsArr.join("\n"));
 
-showMsgProgress("解除代码块加密");
+logger.logWithoutProgress("解除代码块加密");
 // 有则输出名字，无则输出false
 function getFuncDecryptorName(jsStr) {
 	// jsStr为空或不是以var 开头
@@ -607,9 +781,6 @@ function replaceObjFunc(callObjName, callFuncName, callStr, ignoreQuoteOutside) 
 	}
 	let funcResStr = funcStr.slice(transFuncStr.indexOf("{return ") + 8, transFuncStr.lastIndexOf(";}"));
 	funcParams.forEach(function (param, index) {
-		// if (transLayer(callParams[index]).match(/[^=!]=[^=]/)) {
-		// 	callParams[index] = "(" + callParams[index] + ")";
-		// }
 		funcResStr = funcResStr.replace(param, callParams[index].replace(/\$/g, "$$$$"));
 	});
 
@@ -639,14 +810,14 @@ function findAndDecryptCodeBlock(jsArr, isShowProgress) {
 			jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndDecryptCodeBlock([jsStr.slice(startPos + 1, endPos)]).join(""));
 		}
 		if (isShowProgress) {
-			showNumProgress("解除代码块加密", progress + 1, jsArr.length);
+			logger.logWithProgress("解除代码块加密", progress + 1, jsArr.length);
 		}
 		return jsStr;
 	});
 }
 function decryptCodeBlockArr(jsArr, isShowProgress) {
 	if (isShowProgress) {
-		showNumProgress("解除代码块加密", 0, jsArr.length);
+		logger.logWithProgress("解除代码块加密", 0, jsArr.length);
 	}
 	let decryptorObjName = getFuncDecryptorName(jsArr[0]);
 	// 代码块解密
@@ -711,7 +882,7 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 jsStatementsArr = decryptCodeBlockArr(jsStatementsArr, true);
 fs.writeFileSync("DecryptResult2.js", jsStatementsArr.join("\n"));
 
-showMsgProgress("清理死代码（花指令）");
+logger.logWithProgress("清理死代码（花指令）");
 function simplifyIf(ifJsStr) {
 	let conditionStartPos = 2, conditionEndPos = getQuoteEndPos(ifJsStr, conditionStartPos);
 	let ifRes = eval(ifJsStr.slice(conditionStartPos, conditionEndPos + 1));
@@ -743,14 +914,14 @@ function findAndClearDeadCodes(jsArr, isShowProgress) {
 			jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndClearDeadCodes([jsStr.slice(startPos + 1, endPos)]).join(""));
 		}
 		if (isShowProgress) {
-			showNumProgress("清理死代码（花指令）", progress + 1, jsArr.length);
+			logger.logWithProgress("清理死代码（花指令）", progress + 1, jsArr.length);
 		}
 		return jsStr;
 	});
 }
 function clearDeadCodes(jsArr, isShowProgress) {
 	if (isShowProgress) {
-		showNumProgress("清理死代码（花指令）", 0, jsArr.length);
+		logger.logWithProgress("清理死代码（花指令）", 0, jsArr.length);
 	}
 	if (jsArr.length === 1) {
 		// if死代码
@@ -800,7 +971,7 @@ function clearDeadCodes(jsArr, isShowProgress) {
 jsStatementsArr = clearDeadCodes(jsStatementsArr, true);
 fs.writeFileSync("DecryptResult3.js", jsStatementsArr.join("\n"));
 
-showMsgProgress("提升代码可读性");
+logger.logWithoutDetermine("提升代码可读性");
 function decodeStr(txt) {
 	return eval(`(\`${txt.replace(/`/g, "\\`")}\`)`).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n");
 }
@@ -809,6 +980,7 @@ function decryptFormat(globalJsArr) {
 		let transStrRes = transStr(statement);
 		let hexNumberPos = Number.POSITIVE_INFINITY;
 		while ((hexNumberPos = transStrRes.lastSearchOf(/0x([0-9a-fA-F])*/, hexNumberPos - 1)) !== -1) {
+			logger.weakUpdate();
 			let activeNumStr = transStrRes.slice(hexNumberPos).match(/0x([0-9a-fA-F])*/)[0];
 			// ^~是位运算符，此处排除
 			let checkNumberRegexp = /[{}\[\]().,+\-*\/!<>%=&|?:; ]/;
@@ -830,6 +1002,7 @@ function decryptFormat(globalJsArr) {
 		transStrRes = transStr(statement);
 		let objIndexerPos = Number.POSITIVE_INFINITY;
 		while ((objIndexerPos = transStrRes.lastSearchOf(/\['(S)*.']/, objIndexerPos - 1)) !== -1) {
+			logger.weakUpdate();
 			let activeIndexerStr = transStrRes.slice(objIndexerPos).match(/\['(S)*.']/)[0];
 			let leftSplitter, rightSplitter;
 
@@ -909,6 +1082,7 @@ function decryptFormat(globalJsArr) {
 		let hexCharRes = Number.POSITIVE_INFINITY;
 		// console.log("first: ", transStrRes.lastSearchOf(/'S+'/, hexCharRes - 1));
 		while ((hexCharRes = transStrRes.lastSearchOf(/'S+'/, hexCharRes - 1)) !== -1) {
+			logger.weakUpdate();
 			let activeStr = transStrRes.slice(hexCharRes++).match(/'S+'/)[0];
 			// console.log("raw: ", transStrRes.slice(hexCharRes - 1, hexCharRes + activeStr.length - 1), statement.slice(hexCharRes - 1, hexCharRes + activeStr.length - 1));
 			// console.log("result: ", decodeStr(statement.slice(hexCharRes, hexCharRes + activeStr.length - 2)));
@@ -921,7 +1095,7 @@ function decryptFormat(globalJsArr) {
 jsStatementsArr = decryptFormat(jsStatementsArr);
 fs.writeFileSync("DecryptResult4.js", jsStatementsArr.join("\n"));
 
-showMsgProgress("格式化代码");
+logger.logWithoutProgress("格式化代码");
 function findAndFormatCodeBlock(jsArr, layer, isShowProgress) {
 	return jsArr.map(function (jsStr, progress) {
 		// 特殊情况会在前面添加前缀
@@ -962,22 +1136,21 @@ function findAndFormatCodeBlock(jsArr, layer, isShowProgress) {
 			jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndFormatCodeBlock([jsStr.slice(startPos + 1, endPos)], layer).join("\n" + "".padEnd(layer, "\t")));
 		}
 		if (isShowProgress) {
-			showNumProgress("格式化代码", progress + 1, jsArr.length);
+			logger.logWithProgress("格式化代码", progress + 1, jsArr.length);
 		}
 		return jsStr;
 	});
 }
 function formatCodeBlockArr(jsArr, layer, isShowProgress) {
 	if (isShowProgress) {
-		showNumProgress("格式化代码", layer, jsArr.length);
+		logger.logWithProgress("格式化代码", layer, jsArr.length);
 	}
 	return findAndFormatCodeBlock(jsArr, layer, isShowProgress);
 }
 jsStatementsArr = formatCodeBlockArr(jsStatementsArr, 1, true);
 fs.writeFileSync("DecryptResult5.js", jsStatementsArr.join("\n"));
 
-const END_TIME = new Date().getTime();
+const END_TIMESTAMP = new Date().getTime();
 
-console.clear();
-console.info(`* 解密完成！
-* 耗时：${END_TIME - START_TIME}ms`);
+logger.logWithoutProgress(`解密完成！
+* 耗时：${END_TIMESTAMP - START_TIMESTAMP - PAUSE_TIME}ms`);
