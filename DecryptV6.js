@@ -103,7 +103,7 @@ String.prototype.lastSearchOf = function (regexp, position) {
 	return posRes;
 };
 
-fs.writeFileSync("res.txt", "");
+// fs.writeFileSync("res.txt", "");
 /**
  * 日志工具
  * */
@@ -586,7 +586,6 @@ function compressionCode(jsStr) {
 	}
 
 	transRes = transStr(jsStr);
-	fs.writeFileSync("res.js", transRes);
 
 	let spacePos = Number.POSITIVE_INFINITY;
 	while ((spacePos === Number.POSITIVE_INFINITY || spacePos - 1 >= 0) && (spacePos = Math.max(
@@ -596,12 +595,10 @@ function compressionCode(jsStr) {
 		transRes.lastIndexOf("\r", spacePos - 1)
 	)) !== -1) {
 		logger.weakUpdate();
-		fs.appendFileSync("res.txt", jsStr.slice(spacePos - 1, spacePos + 2) + " ");
 		if ((jsStr[spacePos - 1] == null || jsStr[spacePos - 1].match(/[{}\[\]().,+\-*\/~!%<>=&|^?:;@ \t\n\r]/)) ||
 			(jsStr[spacePos + 1] == null || jsStr[spacePos + 1].match(/[{}\[\]().,+\-*\/~!%<>=&|^?:;@ \t\n\r]/))) {
 			jsStr = jsStr.replaceWithStr(spacePos, spacePos + 1, "");
 		}
-		fs.appendFileSync("res.txt", jsStr.slice(spacePos - 1, spacePos + 2) + "\n");
 	}
 
 	return jsStr;
