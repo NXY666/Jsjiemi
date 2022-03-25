@@ -1,22 +1,41 @@
-/*
-* JsjiamiV6简易解密（作者：NXY666）
-*/
-const FILE_NAME = "./template/7.js";
+/**
+ * JsjiamiV6简易解密（作者：NXY666）
+ */
+const FILE_NAME = "./template/format/1.js";
 
 const fs = require("fs");
 const vm = require("vm");
 const readline = require("readline");
 const Path = require("path");
 
+/**
+ * 获取数组末尾的值。
+ * @returns {any | undefined} 返回数组末尾的值。若数组为空，则返回undefined。
+ */
 Array.prototype.top = function () {
 	return this[this.length - 1];
 };
+
+/**
+ * 使用字符串替换当前字符串中的一段字符。
+ * @param {number} st 起始位置。
+ * @param {number} en 结束位置。
+ * @param {string} str 替换结果字符串。
+ */
 String.prototype.replaceWithStr = function (st, en, str) {
 	return this.slice(0, st) + str + this.slice(en);
 };
+
+/**
+ * 以一段长度相同的字符串为模板分割当前字符串。
+ * @param {string} str 字符串模板。
+ * @param {string} separator 分隔符。
+ * @returns {string[]} 返回分割后的字符串数组。
+ * @throws {Error} 字符串模板长度与当前字符串长度不一致时抛出错误。
+ */
 String.prototype.splitByOtherStr = function (str, separator) {
 	if (this.length !== str.length) {
-		throw Error("字符串长度与源字符串长度不一致。");
+		throw Error("字符串模板长度与当前字符串长度不一致。");
 	}
 	let splitRes = str.split(separator);
 	let nowPos = 0;
@@ -26,10 +45,20 @@ String.prototype.splitByOtherStr = function (str, separator) {
 		return res;
 	}.bind(this));
 };
-// noinspection JSUnusedGlobalSymbols
+
+/**
+ * 使用正则表达式或字符串从某一位置开始搜索字符串。
+ * @param {RegExp|string} regexp 正则表达式。若为字符串则等同于 String.indexOf 。
+ * @param {number?} position 起始位置。若不指定则从 0 位置开始搜索。
+ * @returns {number} 匹配到的索引值。若未匹配成功，则返回 -1。
+ */
 String.prototype.searchOf = function (regexp, position) {
 	if (typeof regexp == "string") {
 		return this.indexOf(regexp, position);
+	}
+
+	if (position === undefined) {
+		position = 0;
 	}
 
 	if (position < 0) {
@@ -40,6 +69,13 @@ String.prototype.searchOf = function (regexp, position) {
 
 	return position + this.slice(position).search(regexp);
 };
+
+/**
+ * 使用正则表达式或字符串从字符串末尾的某一位置开始搜索字符串。
+ * @param {RegExp|string} regexp 正则表达式。若为字符串则等同于 String.lastIndexOf 。
+ * @param {number?} position 起始位置。若不指定则从 0 位置开始搜索。
+ * @returns {number} 匹配到的索引值。若未匹配成功，则返回 -1。
+ */
 String.prototype.lastSearchOf = function (regexp, position) {
 	if (typeof regexp != "object") {
 		return this.lastIndexOf(regexp, position);
@@ -47,7 +83,12 @@ String.prototype.lastSearchOf = function (regexp, position) {
 		regexp = new RegExp(regexp.source, regexp.flags + 'g');
 	}
 
+	if (position === undefined) {
+		position = 0;
+	}
+
 	let thisStr = this;
+
 	if (position < 0) {
 		return -1;
 	} else if (position < thisStr.length) {
@@ -246,7 +287,17 @@ function transStr(jsStr) {
 					continue;
 				} else if (signStack.length === 0) {
 					// [{( +-* <>=? &|! ~^
-					if (nowPos === 0 || jsArr[nowPos - 1].match(/[\[{(+\-*<>=?&|!~^;]/)) {
+					if (jsArr[nowPos + 1] === '*') {
+						// 块注释
+						let endPos = jsStr.indexOf("*/", nowPos);
+						jsArr.fill("C", nowPos + 2, endPos);
+						nowPos = endPos + 1;
+					} else if (jsArr[nowPos + 1] === '/') {
+						// 行注释
+						let endPos = jsStr.searchOf(/(\n|\r|\n\r|\r\n)/, nowPos);
+						jsArr.fill("C", nowPos + 2, endPos);
+						nowPos = endPos - 1;
+					} else if (nowPos === 0 || jsArr[nowPos - 1].match(/[\[{(+\-*<>=?&|!~^;]/)) {
 						// 开始正则
 						signStack.push(jsArr[nowPos]);
 					}
@@ -500,14 +551,60 @@ let START_TIMESTAMP = new Date().getTime(), PAUSE_TIME = 0;
 
 // 初始化日志工具并确认文件路径
 let logger = new Logger({});
-logger.logWithoutProgress("JsjiamiV6 Decryptor");
+logger.logWithoutProgress("----====* JsjiamiV6 Decryptor *====----");
 let absolutePathStr = Path.resolve(FILE_NAME);
-let absolutePathObj = Path.parse(absolutePathStr);
 logger.logWithoutProgress("解密文件：" + absolutePathStr);
-logger.logWithoutProgress("输出目录：" + absolutePathObj.dir);
+logger.logWithoutProgress("输出目录：" + Path.resolve("./"));
 pause();
 
 let js = fs.readFileSync(absolutePathStr).toString().trim() + ";";
+
+logger.logWithoutDetermine("净化代码");
+function compressionCode(jsStr) {
+	let transRes = transStr(jsStr);
+
+	let commentPos = Number.POSITIVE_INFINITY;
+	while ((commentPos === Number.POSITIVE_INFINITY || commentPos - 1 >= 0) && (commentPos = Math.max(
+		transRes.lastSearchOf(/\/\*C*\*\//, commentPos - 1),
+		transRes.lastSearchOf(/\/\/C*(\n|\r|\n\r|\r\n)/, commentPos - 1)
+	)) !== -1) {
+		logger.weakUpdate();
+		switch (transRes[commentPos + 1]) {
+			case '*': {
+				let blockComment = transRes.slice(commentPos).match(/^\/\*C*\*\//)[0];
+				jsStr = jsStr.replaceWithStr(commentPos, commentPos + blockComment.length, "");
+				break;
+			}
+			case '/': {
+				let lineComment = transRes.slice(commentPos).match(/^\/\/C*(\n|\r|\n\r|\r\n)/)[0];
+				jsStr = jsStr.replaceWithStr(commentPos, commentPos + lineComment.length, "");
+				break;
+			}
+			default:
+				throw new Error("发现未知的注释类型。");
+		}
+	}
+
+	transRes = transStr(jsStr);
+
+	let spacePos = Number.POSITIVE_INFINITY;
+	while ((spacePos === Number.POSITIVE_INFINITY || spacePos - 1 >= 0) && (spacePos = Math.max(
+		transRes.lastIndexOf(" ", spacePos - 1),
+		transRes.lastIndexOf("\t", spacePos - 1),
+		transRes.lastIndexOf("\n", spacePos - 1),
+		transRes.lastIndexOf("\r", spacePos - 1)
+	)) !== -1) {
+		logger.weakUpdate();
+		if ((jsStr[spacePos - 1] == null || jsStr[spacePos - 1].match(/[{}\[\]().,+\-*\/~!%<>=&|^?:;@ \t\n\r]/)) ||
+			(jsStr[spacePos + 1] == null || jsStr[spacePos + 1].match(/[{}\[\]().,+\-*\/~!%<>=&|^?:;@ \t\n\r]/))) {
+			jsStr = jsStr.replaceWithStr(spacePos, spacePos + 1, "");
+		}
+	}
+
+	return jsStr;
+}
+js = compressionCode(js);
+fs.writeFileSync("DecryptResult0.js", js);
 
 logger.logWithoutDetermine("解除全局加密");
 const globalDecryptorInfo = {
@@ -711,6 +808,7 @@ function decryptGlobalJs(js) {
 	let statementsTypeArr = getStatementsType(jsArr);
 	if (globalDecryptorInfo.decryptor.raw === null) {
 		pause("【警告】解密器识别失败，可在GitHub上提交issue以寻找原因。");
+		return jsArr;
 	} else {
 		if (globalDecryptorInfo.preprocessFunction.raw === null && globalDecryptorInfo.verifyFunction.raw === null) {
 			pause("【警告】已发现解密器，但未发现其对应的预处理函数和验证函数，可能无法正常运行。可在GitHub上提交issue以寻找原因。");
@@ -741,7 +839,11 @@ jsStatementsArr = decryptGlobalJs(js);
 fs.writeFileSync("DecryptResult1.js", jsStatementsArr.join("\n"));
 
 logger.logWithoutProgress("解除代码块加密");
-// 有则输出名字，无则输出false
+/**
+ * 获取代码块加密对象的名称
+ * @param jsStr {string} 需解析的代码块
+ * @returns {string | boolean} 若传入的代码块包含加密对象则输出加密对象名称，反之则输出false。
+ */
 function getFuncDecryptorName(jsStr) {
 	// jsStr为空或不是以var 开头
 	if (!jsStr || jsStr.slice(0, 4) !== "var ") {
@@ -765,7 +867,14 @@ function getFuncDecryptorName(jsStr) {
 		return false;
 	}
 }
-// 替换掉代码块中所有用加密对象加密过的东西
+/**
+ * 替换代码块中使用加密对象方法加密的内容
+ * @param callObjName {string} 所在代码块的加密对象名称
+ * @param callFuncName {string} 调用加密对象的方法名称
+ * @param callStr {string} 调用加密对象方法的原文
+ * @param ignoreQuoteOutside {boolean} 解密完成后是否不使用圆括号包装结果
+ * @returns {string} 解密结果
+ */
 function replaceObjFunc(callObjName, callFuncName, callStr, ignoreQuoteOutside) {
 	// 获取解密对象内函数的参数列表
 	let callFunc = virtualEval(callObjName + "['" + callFuncName + "']");
@@ -977,9 +1086,10 @@ function decodeStr(txt) {
 }
 function decryptFormat(globalJsArr) {
 	return globalJsArr.map(function (statement) {
+		logger.weakUpdate();
 		let transStrRes = transStr(statement);
 		let hexNumberPos = Number.POSITIVE_INFINITY;
-		while ((hexNumberPos = transStrRes.lastSearchOf(/0x([0-9a-fA-F])*/, hexNumberPos - 1)) !== -1) {
+		while ((hexNumberPos = transStrRes.lastSearchOf(/0x[0-9a-fA-F]*/, hexNumberPos - 1)) !== -1) {
 			logger.weakUpdate();
 			let activeNumStr = transStrRes.slice(hexNumberPos).match(/0x([0-9a-fA-F])*/)[0];
 			// ^~是位运算符，此处排除
@@ -1001,7 +1111,7 @@ function decryptFormat(globalJsArr) {
 
 		transStrRes = transStr(statement);
 		let objIndexerPos = Number.POSITIVE_INFINITY;
-		while ((objIndexerPos = transStrRes.lastSearchOf(/\['(S)*.']/, objIndexerPos - 1)) !== -1) {
+		while ((objIndexerPos = transStrRes.lastSearchOf(/\['S*.']/, objIndexerPos - 1)) !== -1) {
 			logger.weakUpdate();
 			let activeIndexerStr = transStrRes.slice(objIndexerPos).match(/\['(S)*.']/)[0];
 			let leftSplitter, rightSplitter;
@@ -1010,7 +1120,7 @@ function decryptFormat(globalJsArr) {
 				if (transStrRes[objIndexerPos - 1] !== "/") {
 					return false;
 				}
-				let lastRegExpPos = transStrRes.lastSearchOf(/\/(S)*\//, objIndexerPos);
+				let lastRegExpPos = transStrRes.lastSearchOf(/\/S*\//, objIndexerPos);
 				if (lastRegExpPos === -1) {
 					return false;
 				} else {
@@ -1051,7 +1161,7 @@ function decryptFormat(globalJsArr) {
 
 				// 左边要不要加点
 				if (transStrRes[objIndexerPos - 1] === "/") {
-					let lastRegExpPos = transStrRes.lastSearchOf(/\/(S)*\//, objIndexerPos);
+					let lastRegExpPos = transStrRes.lastSearchOf(/\/S*\//, objIndexerPos);
 					if (lastRegExpPos === -1) {
 						leftSplitter = "";
 						// console.log("× E", objIndexerPos, activeIndexerStr);
@@ -1129,7 +1239,7 @@ function findAndFormatCodeBlock(jsArr, layer, isShowProgress) {
 							}
 						});
 					}
-					jsStr = jsStr.replaceWithStr(startPos + 1, endPos, padTabs + formatCodeBlockArr(splitStatementsRes, layer + 1).join(padTabs) + padTabs.slice(0, -1));
+					jsStr = jsStr.replaceWithStr(startPos + 1, endPos, padTabs + findAndFormatCodeBlock(splitStatementsRes, layer + 1).join(padTabs) + padTabs.slice(0, -1));
 				}
 				continue;
 			}
@@ -1141,13 +1251,7 @@ function findAndFormatCodeBlock(jsArr, layer, isShowProgress) {
 		return jsStr;
 	});
 }
-function formatCodeBlockArr(jsArr, layer, isShowProgress) {
-	if (isShowProgress) {
-		logger.logWithProgress("格式化代码", layer, jsArr.length);
-	}
-	return findAndFormatCodeBlock(jsArr, layer, isShowProgress);
-}
-jsStatementsArr = formatCodeBlockArr(jsStatementsArr, 1, true);
+jsStatementsArr = findAndFormatCodeBlock(jsStatementsArr, 1, true);
 fs.writeFileSync("DecryptResult5.js", jsStatementsArr.join("\n"));
 
 const END_TIMESTAMP = new Date().getTime();
