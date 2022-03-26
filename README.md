@@ -317,7 +317,7 @@
 
 ## 使用方法
 
-1. 在 [`DecryptV6.js`](/DecryptV6.js) 的常量 `FILE_NAME` 中填写需解密的脚本路径。
+1. 根据需求在 [`config.json`](/config.json) 中自定义配置。
 2. 运行 [`DecryptV6.js`](/DecryptV6.js) 。
 
 ## 输出结果
@@ -343,5 +343,3 @@
     写腻了，不想写了……
 
 - [ ] 摆烂。
-- [x] 支持清除残留注释。
-- [ ] 解密器模块化。
