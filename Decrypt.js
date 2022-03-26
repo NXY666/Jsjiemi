@@ -1,8 +1,7 @@
 /**
- * JS简易解密（作者：NXY666）
+ * JS简易解密
+ * @author NXY666
  */
-const FILE_NAME = "./template/format/1.js";
-
 const fs = require("fs");
 const vm = require("vm");
 const readline = require("readline");
@@ -116,9 +115,14 @@ const Logger = (function () {
 
 	Logger.prototype._options = {
 		// 进度选项
-		logOptions: {},
+		log: {
+			linePrefix: {
+				first: "* ",
+				others: "· "
+			}
+		},
 		// 进度选项
-		progressOptions: {
+		progress: {
 			length: 50,
 			frequency: 100,
 			emptyStr: " ",
@@ -163,9 +167,9 @@ const Logger = (function () {
 	Logger.prototype.weakUpdate = function () {
 		this.updateConsole();
 	};
-	Logger.prototype.updateConsole = function (forceOutput, nextLine) {
+	Logger.prototype.updateConsole = function (forceOutput, stayInline) {
 		// 检查更新是否过于频繁
-		if (!forceOutput && new Date().getTime() - this._data.log.lastTime < this._options.progressOptions.frequency) {
+		if (!forceOutput && new Date().getTime() - this._data.log.lastTime < this._options.progress.frequency) {
 			return;
 		} else {
 			this._data.log.lastTime = new Date().getTime();
@@ -180,24 +184,24 @@ const Logger = (function () {
 			if (now > max) {
 				now = max;
 			}
-			progressArr.length = length = this._options.progressOptions.length;
+			progressArr.length = length = this._options.progress.length;
 			if (this._data.progress.determine) {
 				percent = Math.floor(now / max * length);
-				progressArr.fill(this._options.progressOptions.fullStr, 0, percent);
-				progressArr.fill(this._options.progressOptions.emptyStr, percent, length);
+				progressArr.fill(this._options.progress.fullStr, 0, percent);
+				progressArr.fill(this._options.progress.emptyStr, percent, length);
 				progressStr = `[${progressArr.join("")}] ${(now / max * 100).toFixed(1).padStart(5, " ")}%`;
 			} else {
 				if (this._data.progress.finished) {
-					progressArr.fill(this._options.progressOptions.fullStr, 0, length);
+					progressArr.fill(this._options.progress.fullStr, 0, length);
 					progressStr = `[${progressArr.join("")}]`;
 				} else {
 					let progressBarStart = now % length,
 						progressBarEnd = progressBarStart + length / 5;
-					progressArr.fill(this._options.progressOptions.emptyStr, 0, length);
-					progressArr.fill(this._options.progressOptions.fullStr, progressBarStart, progressBarEnd);
+					progressArr.fill(this._options.progress.emptyStr, 0, length);
+					progressArr.fill(this._options.progress.fullStr, progressBarStart, progressBarEnd);
 					let exceed = progressBarEnd - length;
 					if (exceed > 0) {
-						progressArr.fill(this._options.progressOptions.fullStr, 0, exceed);
+						progressArr.fill(this._options.progress.fullStr, 0, exceed);
 					}
 					progressStr = `[${progressArr.join("")}]`;
 					this._data.progress.now++;
@@ -205,24 +209,24 @@ const Logger = (function () {
 			}
 		}
 
-		// 拼装内容和进度
-		let outputStr = `* ${this._data.log.content} ${progressStr}`;
+		let logContents = this._data.log.content.split("\n"), logContentLength = logContents.length;
 
 		// 写入日志
-		if (!nextLine) {
-			readline.cursorTo(process.stdout, 0, this._data.log.line);
-		} else {
+		if (stayInline) {
 			this._data.log.line += this._data.log.lastContentLines;
+		} else {
+			readline.cursorTo(process.stdout, 0, this._data.log.line);
 		}
 		let lastContentLines = this._data.log.lastContentLines;
-		this._data.log.lastContentLines = outputStr.split("\n").map(function (line) {
-			console.info(line);
-		}).length;
-		if (lastContentLines > this._data.log.lastContentLines) {
-			for (let i = lastContentLines - this._data.log.lastContentLines; i > 0; i--) {
+		logContents.forEach(function (line, index) {
+			console.info((index === 0 ? this._options.log.linePrefix.first : this._options.log.linePrefix.others) + line + (index === logContentLength - 1 ? " " + progressStr : ""));
+		}.bind(this));
+		if (lastContentLines > logContentLength) {
+			for (let i = lastContentLines - logContentLength; i > 0; i--) {
 				console.info("\n");
 			}
 		}
+		this._data.log.lastContentLines = logContentLength;
 	};
 
 	Logger.prototype.logWithProgress = function (content, now, max) {
@@ -536,6 +540,38 @@ function splitStatements(jsStr, statementType) {
 	return splitJsArr;
 }
 /**
+ * JSON5工具
+ */
+const JSON5 = {
+	parse: function (jsonStr) {
+		let transRes = transStr(jsonStr);
+
+		let commentPos = Number.POSITIVE_INFINITY;
+		while ((commentPos === Number.POSITIVE_INFINITY || commentPos - 1 >= 0) && (commentPos = Math.max(
+			transRes.lastSearchOf(/\/\*C*\*\//, commentPos - 1),
+			transRes.lastSearchOf(/\/\/C*(\n|\r|\n\r|\r\n)/, commentPos - 1)
+		)) !== -1) {
+			switch (transRes[commentPos + 1]) {
+				case '*': {
+					let blockComment = transRes.slice(commentPos).match(/^\/\*C*\*\//)[0];
+					jsonStr = jsonStr.replaceWithStr(commentPos, commentPos + blockComment.length, "");
+					break;
+				}
+				case '/': {
+					let lineComment = transRes.slice(commentPos).match(/^\/\/C*(\n|\r|\n\r|\r\n)/)[0];
+					jsonStr = jsonStr.replaceWithStr(commentPos, commentPos + lineComment.length, "");
+					break;
+				}
+				default:
+					throw new Error("发现未知的注释类型。");
+			}
+		}
+
+		return JSON.parse(jsonStr);
+	},
+	stringify: JSON.stringify
+};
+/**
  * 虚拟机执行工具
  * */
 let globalContext = vm.createContext();
@@ -546,18 +582,27 @@ function virtualGlobalEval(jsStr) {
 	return vm.runInContext(jsStr, globalContext);
 }
 
+console.info("正在读取配置文件……");
+let config = JSON5.parse(fs.readFileSync("config.json").toString());
+
 // 开始计时
 let START_TIMESTAMP = new Date().getTime(), PAUSE_TIME = 0;
 
 // 初始化日志工具并确认文件路径
-let logger = new Logger({});
+let logger = new Logger(config["logger"]);
 logger.logWithoutProgress("----====* Jsjiemi *====----");
-let absolutePathStr = Path.resolve(FILE_NAME);
+let absolutePathStr = Path.resolve(config.target);
 logger.logWithoutProgress("解密文件：" + absolutePathStr);
 logger.logWithoutProgress("输出目录：" + Path.resolve("./"));
 pause();
 
-let js = fs.readFileSync(absolutePathStr).toString().trim() + ";";
+let js;
+try {
+	js = fs.readFileSync(absolutePathStr).toString().trim() + ";";
+} catch (e) {
+	console.error(`目标脚本不存在或无权访问，请检查后再试。（${e}）`);
+	process.exit(1);
+}
 
 logger.logWithoutDetermine("净化代码");
 function compressionCode(jsStr) {
@@ -934,7 +979,7 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 		virtualGlobalEval(jsArr[0]);
 
 		let transStrRes;
-		// TODO 识别是否添加括号（二叉树？不！它超出了我的能力范围。）
+		// 识别是否添加括号（二叉树？不！它超出了我的能力范围。）
 		jsArr = jsArr.slice(1).map(function (jsStr) {
 			transStrRes = transStr(jsStr);
 
@@ -1257,4 +1302,4 @@ fs.writeFileSync("DecryptResult5.js", jsStatementsArr.join("\n"));
 const END_TIMESTAMP = new Date().getTime();
 
 logger.logWithoutProgress(`解密完成！
-* 耗时：${END_TIMESTAMP - START_TIMESTAMP - PAUSE_TIME}ms`);
+耗时：${END_TIMESTAMP - START_TIMESTAMP - PAUSE_TIME}ms`);
