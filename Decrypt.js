@@ -1,6 +1,7 @@
 /**
- * JS简易解密
+ * JS解密工具
  * @author NXY666
+ * @version 2.5.2
  */
 const fs = require("fs");
 const vm = require("vm");
@@ -34,7 +35,7 @@ String.prototype.replaceWithStr = function (st, en, str) {
  */
 String.prototype.splitByOtherStr = function (str, separator) {
 	if (this.length !== str.length) {
-		throw Error("字符串模板长度与当前字符串长度不一致。");
+		throw Error("Error: 字符串模板长度与当前字符串长度不一致。");
 	}
 	let splitRes = str.split(separator);
 	let nowPos = 0;
@@ -103,6 +104,7 @@ String.prototype.lastSearchOf = function (regexp, position) {
 };
 
 // fs.writeFileSync("res.txt", "");
+
 /**
  * 日志工具
  * */
@@ -115,7 +117,7 @@ const Logger = (function () {
 
 	Logger.prototype._options = {
 		// 进度选项
-		log: {
+		content: {
 			linePrefix: {
 				first: "* ",
 				others: "· "
@@ -219,7 +221,7 @@ const Logger = (function () {
 		}
 		let lastContentLines = this._data.log.lastContentLines;
 		logContents.forEach(function (line, index) {
-			console.info((index === 0 ? this._options.log.linePrefix.first : this._options.log.linePrefix.others) + line + (index === logContentLength - 1 ? " " + progressStr : ""));
+			console.info((index === 0 ? this._options.content.linePrefix.first : this._options.content.linePrefix.others) + line + (index === logContentLength - 1 ? " " + progressStr : ""));
 		}.bind(this));
 		if (lastContentLines > logContentLength) {
 			for (let i = lastContentLines - logContentLength; i > 0; i--) {
@@ -270,10 +272,26 @@ const Logger = (function () {
 	return Logger;
 })();
 function pause(text) {
+	if (config["quietMode"]) {
+		return;
+	}
 	console.warn(`${text !== undefined ? text + "\n" : ""}[请按任意键继续]`);
 	let stopTime = new Date().getTime();
 	process.stdin.setRawMode(true);
-	fs.readSync(0, Buffer.alloc(1), 0, 1, null);
+	try {
+		fs.readSync(0, Buffer.alloc(1), 0, 1, null);
+	} catch (e) {
+		if (e.code === 'EAGAIN') {
+			// 'resource temporarily unavailable'
+			// Happens on OS X 10.8.3 (not Windows 7!)
+			throw Error("Error: 暂停功能不受支持，请在配置文件中启用安静模式。");
+		} else if (e.code === 'EOF') {
+			// Happens on Windows 7, but not OS X 10.8.3:
+			// simply signals the end of *piped* stdin input.
+		} else {
+			throw e;
+		}
+	}
 	process.stdin.setRawMode(false);
 	PAUSE_TIME += new Date().getTime() - stopTime;
 }
@@ -361,8 +379,7 @@ function transLayer(jsStr, layer) {
 					}
 					signStack.pop();
 				} else {
-					console.error("“]”关闭失败");
-					throw EvalError("解析失败");
+					throw Error("ParseError: 尝试关闭不存在的“[]”。");
 				}
 				break;
 			case '}':
@@ -373,8 +390,7 @@ function transLayer(jsStr, layer) {
 					}
 					signStack.pop();
 				} else {
-					console.error("“}”关闭失败");
-					throw EvalError("解析失败");
+					throw Error("ParseError: 尝试关闭不存在的“{}”。");
 				}
 				break;
 			case ')':
@@ -385,8 +401,7 @@ function transLayer(jsStr, layer) {
 					}
 					signStack.pop();
 				} else {
-					console.error("“)”关闭失败");
-					throw EvalError("解析失败");
+					throw Error("ParseError: 尝试关闭不存在的“()”。");
 				}
 				break;
 			default:
@@ -421,8 +436,7 @@ function getQuoteEndPos(jsStr, startPos) {
 					// 结束
 					signStack.pop();
 				} else {
-					console.error("“]”关闭失败");
-					throw EvalError("解析失败");
+					throw Error("ParseError: 尝试关闭不存在的“[]”。");
 				}
 				break;
 			case '}':
@@ -430,8 +444,7 @@ function getQuoteEndPos(jsStr, startPos) {
 					// 结束
 					signStack.pop();
 				} else {
-					console.error("“}”关闭失败");
-					throw EvalError("解析失败");
+					throw Error("ParseError: 尝试关闭不存在的“{}”。");
 				}
 				break;
 			case ')':
@@ -439,8 +452,7 @@ function getQuoteEndPos(jsStr, startPos) {
 					// 结束
 					signStack.pop();
 				} else {
-					console.error("“)”关闭失败");
-					throw EvalError("解析失败");
+					throw Error("ParseError: 尝试关闭不存在的“()”。");
 				}
 				break;
 			default:
@@ -450,7 +462,7 @@ function getQuoteEndPos(jsStr, startPos) {
 			return nowPos;
 		}
 	}
-	throw Error("未知错误");
+	throw Error("Error: 未知错误。");
 }
 function splitStatements(jsStr, statementType) {
 	let transLayerRes = transLayer(jsStr), splitJsArr = [];
@@ -533,7 +545,7 @@ function splitStatements(jsStr, statementType) {
 			break;
 		}
 		default: {
-			throw "未知的代码块类型 " + statementType;
+			throw Error(`Error: 包含无法解析的代码块类型“${statementType}”。`);
 		}
 	}
 	splitJsArr.type = statementType;
@@ -563,7 +575,7 @@ const JSON5 = {
 					break;
 				}
 				default:
-					throw new Error("发现未知的注释类型。");
+					throw Error(`Error: 包含未知的注释类型“/${transRes[commentPos + 1]}”。`);
 			}
 		}
 
@@ -626,7 +638,7 @@ function compressionCode(jsStr) {
 				break;
 			}
 			default:
-				throw new Error("发现未知的注释类型。");
+				throw Error(`Error: 包含未知的注释类型“${transRes[commentPos + 1]}”。`);
 		}
 	}
 
@@ -704,7 +716,7 @@ function getStatementsType(jsArr) {
 						globalDecryptorInfo.signInfo.confuseType = "abc";
 						globalDecryptorInfo.signInfo.nameRegExp = `[a-z]+`;
 					} else {
-						throw new Error("未知的混淆模式：" + signName);
+						throw Error(`Error: 包含未知的混淆模式“${signName}”。`);
 					}
 				})(globalDecryptorInfo.signInfo.name);
 				globalDecryptorInfo.signInfo.hasSignString = /^var _?[0-9a-zA-Z$ｉＯ]+?='S+?',/.test(transRes);
@@ -931,7 +943,7 @@ function replaceObjFunc(callObjName, callFuncName, callStr, ignoreQuoteOutside) 
 	let callParamsStr = callStr.slice(transCallLayer.indexOf("(") + 1, transCallLayer.indexOf(")"));
 	let callParams = callParamsStr.splitByOtherStr(transCallLayer2.slice(transCallLayer.indexOf("(") + 1, transCallLayer.indexOf(")")), ",");
 	if (funcParams.length !== callParams.length) {
-		throw new Error(`解密对象函数调用参数数量(${callParams.length})与实际(${funcParams})不符`);
+		throw Error(`Error: 解密对象函数调用参数数量(${callParams.length})与实际(${funcParams})不符。`);
 	}
 	let funcResStr = funcStr.slice(transFuncStr.indexOf("{return ") + 8, transFuncStr.lastIndexOf(";}"));
 	funcParams.forEach(function (param, index) {
