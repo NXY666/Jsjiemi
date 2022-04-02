@@ -1,12 +1,12 @@
 {
 	"name": "decrypt-v6",
-	"version": "2.5.1",
+	"version": "2.5.2",
 	"description": "A decryptor for JsjiamiV6.",
 	"main": "DecryptV6.js",
 	"scripts": {
 		"decrypt": "node DecryptV6.js"
 	},
-	"keywords": ["javascript", "decryptor", "jsjiamiv6"],
+	"keywords": ["javascript", "jsjiamiv6", "decryptor"],
 	"author": "NXY666",
 	"license": "AGPL-3.0"
 }
