@@ -358,4 +358,5 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
     写腻了，不想写了……
 
+- [ ] 已发现一些属性字符相关的问题，正在尝试修复。
 - [ ] 摆烂。
