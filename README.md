@@ -328,7 +328,7 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 ## 使用须知
 
 * “JS最牛加密”为加密器名称，并不是浮夸的宣传标语。（😅）
-* 解密文件中**必须**有且仅有通过JsjiamiV6加密的内容。
+* 解密文件中**必须**有且仅有通过JsjiamiV6加密的内容（支持经过格式化的代码）。
 * 注释和局部变量名在代码压缩、混淆的过程中已经丢失或被篡改，无法还原。
 
 ## 使用方法
@@ -342,7 +342,7 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 > 您可以根据您的**需求**从以下版本中选择一个作为最终解密结果。
 
-* DecryptResult0.js：净化代码
+* DecryptResult0.js：净化代码（压缩代码）
 * DecryptResult1.js：解除全局加密
 * DecryptResult2.js：解除代码块加密
 * DecryptResult3.js：清理死代码（花指令）
@@ -356,7 +356,9 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 ## 开发计划
 
-    写腻了，不想写了……
+> 写腻了，不想写了……
+
+> 新版本有在做，但进展缓慢。
 
 - [ ] 已发现一些属性字符相关的问题，正在尝试修复。
 - [ ] 摆烂。
