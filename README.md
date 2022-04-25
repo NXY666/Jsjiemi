@@ -327,11 +327,13 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 ## 使用须知
 
-* 解密文件中**必须**有且仅有通过JS加密器加密的内容。
+* 解密文件中**必须**有且仅有通过JS加密器加密的内容（支持经过格式化的代码）。
 * 注释和局部变量名在代码压缩、混淆的过程中已经丢失或被篡改，无法还原。
 
 ## 使用方法
 
+> 值得注意的是，请务必确保 `config.json` 文件存放在**运行脚本时**所在的文件夹（而不是解密器所在的文件夹，虽然它们通常是相同的）。
+	
 1. 根据需求在 [`config.json`](/config.json) 中自定义配置。
 2. 运行 [`Decrypt.js`](/Decrypt.js) 。
 
@@ -341,7 +343,7 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 > 您可以根据您的**需求**从以下版本中选择一个作为最终解密结果。
 
-* DecryptResult0.js：净化代码
+* DecryptResult0.js：净化代码（压缩代码）
 * DecryptResult1.js：解除全局加密
 * DecryptResult2.js：解除代码块加密
 * DecryptResult3.js：清理死代码（花指令）
@@ -351,10 +353,12 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 ## 提交问题
 
 * 如果该JS**使用了(我)不常用的语法**，可能导致解密失败。如遇到此类情况欢迎提交Issue（仅接受通过Github提交的Issue）。
-* 提交Issue时如需直接发送代码，**请使用 ` ``` ` 包围它们（就像引号那样）**，以防止代码被Markdown语法干扰。
+* 提交Issue时如需直接发送代码，**请使用 ` ``` ` 包围它们**（就像引号那样），以防止代码被Markdown语法干扰。
 
 ## 开发计划
 
-    写腻了，不想写了……
+> 写腻了，不想写了……
 
+- [x] 已发现一些属性字符相关的问题，目前问题已修复。
+- [ ] 合并被拆分的字符串。
 - [ ] 摆烂。
