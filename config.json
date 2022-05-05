@@ -4,8 +4,6 @@
 	 * ·支持使用相对路径，起始路径为启动脚本时所在的路径，而不是解密器所在的位置。
 	 */
 	"target": "./target.js",
-//	"target": "./template/15.js",
-//	"target": "./DecryptResult4.js",
 	/**
 	 * 安静模式
 	 * ·启用后自动跳过所有暂停，这可能错过重要的安全警告。
@@ -59,9 +57,9 @@
 		// 合并字符串（'spl'+'it' --> 'split'）
 		"MergeString": true,
 		// 转换十六进制数字（0xf --> 15）
-		"ConvertHex": false,
+		"ConvertHex": true,
 		// 替换索引器（Object['keys'] --> Object.keys）
-		"ReplaceIndexer": false,
+		"ReplaceIndexer": true,
 		// 转换Unicode字符（\x22 --> "）
 		"ConvertUnicode": true
 	}
