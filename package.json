@@ -1,12 +1,19 @@
 {
 	"name": "jsjiemi",
-	"version": "2.9.0",
+	"version": "2.10.0",
 	"description": "A decryptor for JavaScript.",
-	"main": "Decrypt.js",
-	"scripts": {
-    "decrypt": "node Decrypt.js"
-	},
 	"keywords": ["javascript", "decryptor", "jsjiemi"],
+	"homepage": "https://github.com/NXY666/Jsjiemi",
+	"bugs": {
+		"url": "https://github.com/NXY666/Jsjiemi/issues"
+	},
+	"license": "AGPL-3.0",
 	"author": "NXY666",
-	"license": "AGPL-3.0"
+	"main": "Decryptor.js",
+	"optionalDependencies": {
+		"vm2": "^3.9.9"
+	},
+	"scripts": {
+		"decrypt": "node Decryptor.js"
+	}
 }
