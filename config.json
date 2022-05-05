@@ -54,13 +54,13 @@
 	 * ·错误地配置可选功能可能导致解密效果不佳，若您不了解功能的具体用途建议维持现状。
 	 */
 	"optionalFunction": {
-		// 合并字符串（'spl'+'it' --> 'split'）
+		// 合并串联字符串（'spl'+'it' → 'split'）
 		"MergeString": true,
-		// 转换十六进制数字（0xf --> 15）
+		// 转换十六进制数字（0xf → 15）
 		"ConvertHex": true,
-		// 替换索引器（Object['keys'] --> Object.keys）
+		// 替换索引器（Object['keys'] → Object.keys）
 		"ReplaceIndexer": true,
-		// 转换Unicode字符（\x22 --> "）
+		// 转换Unicode字符（\x22 → "）
 		"ConvertUnicode": true
 	}
 }

@@ -327,21 +327,21 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 * 清理死代码（花指令）
 
-    1. 清理仅包含常量字符串判断的 if 语句。
+  1. 清理仅包含常量字符串判断的 if 语句。
 
-    2. 还原使用 `switch...while` 打乱顺序执行的语句。
+  2. 还原使用 `switch...while` 打乱顺序执行的语句。
 
 * 提升代码可读性
 
-    1. 合并字符串（`'spl'+'it'` → `'split'`）
-    2. 转换十六进制数字（`0xf` → `15`）
-    3. 替换索引器（`Object['keys']` → `Object.keys`）
-    4. 转换Unicode字符（`\x22` → `"`）
+  1. 合并串联字符串（`'spl'+'it'` → `'split'`）
+  2. 转换十六进制数字（`0xf` → `15`）
+  3. 替换索引器（`Object['keys']` → `Object.keys`）
+  4. 转换Unicode字符（`\x22` → `"`）
 
 * 格式化代码
 
-    * 将代码根据语句进行简易的代码缩进。
-    * 因能力有限且类似工具颇多，不做更多的优化和处理。
+  * 将代码根据语句进行简易的代码缩进。
+  * 因能力有限且类似工具颇多，不做更多的优化和处理。
 
 ## 使用须知
 
@@ -354,7 +354,7 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 > 值得注意的是，请务必确保 `config.json` 文件存放在**运行脚本时**所在的文件夹（而不是解密器所在的文件夹，虽然它们通常是相同的）。
 
-1. 运行 `npm install` 。（可选，安装依赖后运行更安全）
+1. 运行 `npm install` 。（可选，安装依赖后解密更安全）
 2. 根据需求在 [`config.json`](/config.json) 中自定义配置。
 3. 运行 [`Decryptor.js`](/Decryptor.js) 。
 
