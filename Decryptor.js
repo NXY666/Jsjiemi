@@ -1,7 +1,7 @@
 /**
  * JsjiamiV6解密工具
  * @author NXY666
- * @version 2.7.0
+ * @version 2.7.1
  */
 const fs = require("fs");
 const readline = require("readline");
@@ -998,7 +998,7 @@ function getCodeBlockDecryptorName(jsStr) {
  * @returns {string} 解密结果
  */
 function replaceDecryptorFunc(callObjName, callFuncName, callStr, ignoreQuoteOutside) {
-	// 获取解密对象内函数的参数列表
+	// 获取加密对象内函数的参数列表
 	let callFunc = virtualEval(callObjName + "['" + callFuncName + "']");
 	let funcStr = callFunc.toString(), transFuncStr = transStr(funcStr);
 	let funcParams = funcStr.slice(transFuncStr.indexOf("(") + 1, transFuncStr.indexOf(")")).splitByOtherStr(transFuncStr.slice(transFuncStr.indexOf("(") + 1, transFuncStr.indexOf(")")), ",");
@@ -1008,11 +1008,14 @@ function replaceDecryptorFunc(callObjName, callFuncName, callStr, ignoreQuoteOut
 	let callParamsStr = callStr.slice(transCallLayer.indexOf("(") + 1, transCallLayer.indexOf(")"));
 	let callParams = callParamsStr.splitByOtherStr(transCallLayer2.slice(transCallLayer.indexOf("(") + 1, transCallLayer.indexOf(")")), ",");
 	if (funcParams.length !== callParams.length) {
-		throw Error(`Error: 解密对象函数调用参数数量(${callParams.length})与实际(${funcParams})不符。`);
+		throw Error(`Error: 加密对象函数调用参数数量(${callParams.length})与实际(${funcParams})不符。`);
 	}
-	let funcResStr = funcStr.slice(transFuncStr.indexOf("{return ") + 8, transFuncStr.lastIndexOf(";}"));
+	let funcResStr = funcStr.slice(transFuncStr.indexOf("{return ") + 8, transFuncStr.lastIndexOf(";}")),
+		replacePos = 0;
 	funcParams.forEach(function (param, index) {
-		funcResStr = funcResStr.replace(param, callParams[index].replace(/\$/g, "$$$$"));
+		replacePos = transStr(funcResStr).replace(/SQ/g, " ").indexOf(param, replacePos);
+		funcResStr = funcResStr.slice(0, replacePos) + funcResStr.slice(replacePos).replace(param, callParams[index].replace(/\$/g, "$$$$"));
+		replacePos = replacePos + param.length;
 	});
 
 	if ((funcParams.length === 2 && !transFuncStr.endsWith(");}")) && !ignoreQuoteOutside) {
@@ -1061,7 +1064,7 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 			transStrRes = transStr(jsStr);
 
 			let decryptorPos = Number.POSITIVE_INFINITY;
-			while ((decryptorPos === Number.POSITIVE_INFINITY || decryptorPos - 1 >= 0) && (decryptorPos = transStrRes.lastIndexOf(decryptorObjName, decryptorPos - 1)) !== -1) {
+			while ((decryptorPos === Number.POSITIVE_INFINITY || decryptorPos - 1 >= 0) && (decryptorPos = transStrRes.lastSearchOf(new RegExp(decryptorObjName + "\\['.+?']"), decryptorPos - 1)) !== -1) {
 				let leftSquarePos = transStrRes.indexOf("[", decryptorPos),
 					rightSquarePos = transStrRes.indexOf("]", decryptorPos);
 
@@ -1119,11 +1122,7 @@ function simplifyIf(ifJsStr) {
 	let ifRes = eval(ifJsStr.slice(conditionStartPos, conditionEndPos + 1));
 	let elsePos = getQuoteEndPos(ifJsStr, conditionEndPos + 1) + 1, endPos = getQuoteEndPos(ifJsStr, elsePos + 4);
 
-	if (ifRes) {
-		return ifJsStr.slice(conditionEndPos + 2, elsePos - 1);
-	} else {
-		return ifJsStr.slice(elsePos + 5, endPos);
-	}
+	return ifRes ? ifJsStr.slice(conditionEndPos + 2, elsePos - 1) : ifJsStr.slice(elsePos + 5, endPos);
 }
 function findAndClearDeadCodes(jsArr, isShowProgress) {
 	return jsArr.map(function (jsStr, progress) {
@@ -1163,14 +1162,52 @@ function clearDeadCodes(jsArr, isShowProgress) {
 		}
 	} else if (jsArr.length === 2) {
 		// switch死代码
-		if (/^var (\S*?)='[0-9|]*?'\['split']\('\|'\),(\S*?)=0x0;/.test(jsArr[0]) && /^while\(true\){switch\((\S*?)\[(\S*?)\+\+]\)/.test(jsArr[1])) {
-			let initMatch = jsArr[0].match(/var (\S*?)='[0-9|]*?'\['split']\('\|'\),(\S*?)=0x0;/),
-				whileMatch = jsArr[1].match(/while\(true\){switch\((\S*?)\[(\S*?)\+\+]\)/);
+		if (/^var (\S+?)='[0-9|]*?'\['split']\('\|'\),(\S+?)=0x0;/.test(jsArr[0]) && /^while\(true\){switch\((\S+?)\[(\S+?)\+\+]\)/.test(jsArr[1])) {
+			let initMatch = jsArr[0].match(/var (\S+?)='[0-9|]*?'\['split']\('\|'\),(\S+?)=0x0;/),
+				whileMatch = jsArr[1].match(/while\(true\){switch\((\S+?)\[(\S+?)\+\+]\)/);
 			let sequence;
 			if ((initMatch && initMatch.length === 3 && whileMatch && whileMatch.length === 3) && ((sequence = initMatch[1]) === whileMatch[1] && initMatch[2] === whileMatch[2])) {
 				virtualEval(jsArr[0]);
 				let sequenceList = virtualEval(sequence);
 				let caseBlock = jsArr[1].slice(whileMatch[0].length + 1, getQuoteEndPos(jsArr[1], whileMatch[0].length));
+				let transCaseBlock = transLayer(caseBlock);
+				let caseList = [];
+				let caseRegexp = /case'S*'/g;
+
+				sequenceList.forEach(function () {
+					let regRes = caseRegexp.exec(transCaseBlock);
+					let startPos = regRes.index + regRes[0].length + 1, endPos = (() => {
+						let casePos = transCaseBlock.indexOf("case'", startPos + 1);
+						let continuePos = transCaseBlock.indexOf("continue;", startPos + 1);
+						if (casePos === -1) {
+							casePos = Number.POSITIVE_INFINITY;
+						}
+						if (continuePos === -1) {
+							continuePos = Number.POSITIVE_INFINITY;
+						}
+						return Math.min(casePos, continuePos);
+					})();
+					caseList.push(caseBlock.slice(startPos, endPos).replace("continue;", ""));
+				});
+
+				return clearDeadCodes(sequenceList.map(function (index) {
+					return caseList[index];
+				}));
+			}
+		}
+	} else if (jsArr.length === 3) {
+		// switch死代码
+		if (/^var (\S+?)='[0-9|]*?'\['split']\('\|'\);/.test(jsArr[0]) && /^var (\S+?)=0x0;/.test(jsArr[1]) && /^while\(true\){switch\((\S+?)\[(\S+?)\+\+]\)/.test(jsArr[2])) {
+			let initMatch0 = jsArr[0].match(/^var (\S+?)='[0-9|]*?'\['split']\('\|'\);$/),
+				initMatch1 = jsArr[1].match(/^var (\S+?)=0x0;$/),
+				whileMatch = jsArr[2].match(/while\(true\){switch\((\S+?)\[(\S+?)\+\+]\)/);
+			let sequence;
+			if ((initMatch0 && initMatch0.length === 2 && initMatch1 && initMatch1.length === 2 && whileMatch && whileMatch.length === 3) &&
+				((sequence = initMatch0[1]) === whileMatch[1] && initMatch1[1] === whileMatch[2])) {
+				virtualEval(jsArr[0]);
+				virtualEval(jsArr[1]);
+				let sequenceList = virtualEval(sequence);
+				let caseBlock = jsArr[2].slice(whileMatch[0].length + 1, getQuoteEndPos(jsArr[2], whileMatch[0].length));
 				let transCaseBlock = transLayer(caseBlock);
 				let caseList = [];
 				let caseRegexp = /case'S*'/g;
@@ -1212,7 +1249,7 @@ function decryptFormat(globalJsArr) {
 
 		let transStrRes;
 
-		// 合并字符串（'spl'+'it' --> 'split'）
+		// 合并串联字符串（'spl'+'it' → 'split'）
 		if (config["optionalFunction"]["MergeString"]) {
 			transStrRes = transStr(statement);
 			let multiStrPos = Number.POSITIVE_INFINITY;
@@ -1222,7 +1259,7 @@ function decryptFormat(globalJsArr) {
 			}
 		}
 
-		// 转换十六进制数字（0x1 --> 1）
+		// 转换十六进制数字（0x1 → 1）
 		if (config["optionalFunction"]["ConvertHex"]) {
 			transStrRes = transStr(statement);
 			let hexNumberPos = Number.POSITIVE_INFINITY;
@@ -1244,7 +1281,7 @@ function decryptFormat(globalJsArr) {
 			}
 		}
 
-		// 替换索引器（Object['keys'] --> Object.keys）
+		// 替换索引器（Object['keys'] → Object.keys）
 		if (config["optionalFunction"]["ReplaceIndexer"]) {
 			transStrRes = transStr(statement);
 			let objIndexerPos = Number.POSITIVE_INFINITY;
@@ -1323,7 +1360,7 @@ function decryptFormat(globalJsArr) {
 			}
 		}
 
-		// 转换Unicode字符（\x22 --> "）
+		// 转换Unicode字符（\x22 → "）
 		if (config["optionalFunction"]["ConvertUnicode"]) {
 			transStrRes = transStr(statement);
 			let hexCharRes = Number.POSITIVE_INFINITY;
@@ -1377,7 +1414,7 @@ function findAndFormatCodeBlock(jsArr, layer, isShowProgress) {
 					jsStr = jsStr.replaceWithStr(startPos + 1, endPos, padTabs + findAndFormatCodeBlock(splitStatementsRes, layer + 1).join(padTabs) + padTabs.slice(0, -1));
 				} else {
 					let padTabs = "\n" + "".padEnd(layer + prefixCount, "\t");
-					jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndFormatCodeBlock([jsStr.slice(startPos + 1, endPos)], layer+1).join(padTabs));
+					jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndFormatCodeBlock([jsStr.slice(startPos + 1, endPos)], layer + 1).join(padTabs));
 				}
 				continue;
 			}
