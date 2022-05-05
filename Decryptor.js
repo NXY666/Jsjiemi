@@ -1,12 +1,13 @@
 /**
  * JsjiamiV6解密工具
  * @author NXY666
- * @version 2.5.2
+ * @version 2.7.0
  */
 const fs = require("fs");
-const vm = require("vm");
 const readline = require("readline");
 const Path = require("path");
+const vm = require("vm");
+let vm2;
 
 /**
  * 获取数组末尾的值。
@@ -587,15 +588,28 @@ const JSON5 = {
  * 虚拟机执行工具
  * */
 let globalContext = vm.createContext();
+try {
+	let {VM} = require("vm2");
+	vm2 = new VM({
+		allowAsync: false,
+		sandbox: globalContext
+	});
+} catch (e) {
+}
 function virtualEval(jsStr) {
 	return virtualGlobalEval(jsStr);
 }
 function virtualGlobalEval(jsStr) {
-	return vm.runInContext(jsStr, globalContext);
+	return vm2 ? vm2.run(String(jsStr)) : vm.runInContext(jsStr, globalContext);
 }
 
-console.info("正在读取配置文件……");
-let config = JSON5.parse(fs.readFileSync("config.json").toString());
+let config;
+try {
+	config = JSON5.parse(fs.readFileSync("config.json").toString());
+} catch (e) {
+	console.error(e);
+	throw Error(`未找到配置文件（config.json），请确认该文件是否存在于当前目录。`);
+}
 
 // 开始计时
 let START_TIMESTAMP = new Date().getTime(), PAUSE_TIME = 0;
@@ -604,16 +618,20 @@ let START_TIMESTAMP = new Date().getTime(), PAUSE_TIME = 0;
 let logger = new Logger(config["logger"]);
 logger.logWithoutProgress("----====* JsjiamiV6 Decryptor *====----");
 let absolutePathStr = Path.resolve(config.target);
-logger.logWithoutProgress("解密文件：" + absolutePathStr);
-logger.logWithoutProgress("输出目录：" + Path.resolve("./"));
+logger.logWithoutProgress(`解密文件：${absolutePathStr}`);
+logger.logWithoutProgress(`输出目录：${Path.resolve("./")}`);
+logger.logWithoutProgress(`模拟模块：${vm2 ? "vm2" : "vm (不安全)"}`);
+if (!vm2) {
+	console.warn("【安全建议】当前未安装 vm2 模块，该模块支持相对安全地执行 JavaScript 代码。在安装 vm2 模块之前，解密器将使用 Node.js 内建的 vm 模块。因此，请尽量避免解密不可信的 JavaScript 文件。");
+}
 pause();
 
 let js;
 try {
 	js = fs.readFileSync(absolutePathStr).toString().trim() + ";";
 } catch (e) {
-	console.error(`目标脚本不存在或无权访问，请检查后再试。（${e}）`);
-	process.exit(1);
+	console.error(e);
+	throw Error(`目标脚本不存在或无权访问，请检查后再试。`);
 }
 
 logger.logWithoutDetermine("净化代码");
@@ -829,7 +847,7 @@ function getStatementsType(jsArr) {
 				// 无预处理函数
 				// function _0x9549(_0x52aa18,_0x1a09ad){_0x52aa18=~~'0x'['concat'](_0x52aa18['slice'](0x0));var _0x4fe032=_0x34a7[_0x52aa18];return _0x4fe032;};
 				if (/function (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3}),(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\)\{(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=~~'0x'\['concat']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['slice']\(0x0\)\);var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\[(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})];return (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3});};/.test(jsStr)) {
-					isDecryptor = true;  
+					isDecryptor = true;
 				}
 			}
 			if (isDecryptor) {
@@ -944,11 +962,11 @@ fs.writeFileSync("DecryptResult1.js", jsStatementsArr.join("\n"));
 
 logger.logWithoutProgress("解除代码块加密");
 /**
- * 获取代码块加密对象的名称
+ * 获取代码块内加密对象的名称
  * @param jsStr {string} 需解析的代码块
  * @returns {string | boolean} 若传入的代码块包含加密对象则输出加密对象名称，反之则输出false。
  */
-function getFuncDecryptorName(jsStr) {
+function getCodeBlockDecryptorName(jsStr) {
 	// jsStr为空或不是以var 开头
 	if (!jsStr || jsStr.slice(0, 4) !== "var ") {
 		// fs.appendFileSync("res.txt", "初步检查不通过:" + jsStr.slice(0, 100) + "\n");
@@ -979,7 +997,7 @@ function getFuncDecryptorName(jsStr) {
  * @param ignoreQuoteOutside {boolean} 解密完成后是否不使用圆括号包装结果
  * @returns {string} 解密结果
  */
-function replaceObjFunc(callObjName, callFuncName, callStr, ignoreQuoteOutside) {
+function replaceDecryptorFunc(callObjName, callFuncName, callStr, ignoreQuoteOutside) {
 	// 获取解密对象内函数的参数列表
 	let callFunc = virtualEval(callObjName + "['" + callFuncName + "']");
 	let funcStr = callFunc.toString(), transFuncStr = transStr(funcStr);
@@ -997,7 +1015,7 @@ function replaceObjFunc(callObjName, callFuncName, callStr, ignoreQuoteOutside) 
 		funcResStr = funcResStr.replace(param, callParams[index].replace(/\$/g, "$$$$"));
 	});
 
-	if (funcParams.length === 2 && !transFuncStr.endsWith(");}") && !ignoreQuoteOutside) {
+	if ((funcParams.length === 2 && !transFuncStr.endsWith(");}")) && !ignoreQuoteOutside) {
 		return "(" + funcResStr + ")";
 	} else {
 		return funcResStr;
@@ -1032,7 +1050,7 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 	if (isShowProgress) {
 		logger.logWithProgress("解除代码块加密", 0, jsArr.length);
 	}
-	let decryptorObjName = getFuncDecryptorName(jsArr[0]);
+	let decryptorObjName = getCodeBlockDecryptorName(jsArr[0]);
 	// 代码块解密
 	if (decryptorObjName) {
 		virtualGlobalEval(jsArr[0]);
@@ -1082,7 +1100,7 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 									jsStrFront.startsWith("]")
 								)
 							);
-						jsStr = jsStr.replaceWithStr(decryptorPos, rightRoundPos + 1, replaceObjFunc(decryptorObjName, jsStr.slice(leftSquarePos + 2, rightSquarePos - 1), jsStr.slice(decryptorPos, rightRoundPos + 1), ignoreQuoteOutside));
+						jsStr = jsStr.replaceWithStr(decryptorPos, rightRoundPos + 1, replaceDecryptorFunc(decryptorObjName, jsStr.slice(leftSquarePos + 2, rightSquarePos - 1), jsStr.slice(decryptorPos, rightRoundPos + 1), ignoreQuoteOutside));
 						break;
 					}
 				}
@@ -1191,114 +1209,129 @@ function decodeStr(txt) {
 function decryptFormat(globalJsArr) {
 	return globalJsArr.map(function (statement) {
 		logger.weakUpdate();
-		let transStrRes = transStr(statement);
-		let hexNumberPos = Number.POSITIVE_INFINITY;
-		while ((hexNumberPos = transStrRes.lastSearchOf(/0x[0-9a-fA-F]*/, hexNumberPos - 1)) !== -1) {
-			logger.weakUpdate();
-			let activeNumStr = transStrRes.slice(hexNumberPos).match(/0x([0-9a-fA-F])*/)[0];
-			// ^~是位运算符，此处排除
-			let checkNumberRegexp = /[{}\[\]().,+\-*\/!<>%=&|?:; ]/;
-			if (
-				transStrRes[hexNumberPos - 1].match(checkNumberRegexp) != null &&
-				(transStrRes[hexNumberPos - 1].match(/[&|]/) == null || transStrRes[hexNumberPos - 1] === transStrRes[hexNumberPos - 2]) &&
-				(transStrRes[hexNumberPos - 1].match(/[<>]/) == null || transStrRes[hexNumberPos - 1] !== transStrRes[hexNumberPos - 2]) &&
-				transStrRes[hexNumberPos + activeNumStr.length].match(checkNumberRegexp) != null &&
-				(transStrRes[hexNumberPos + activeNumStr.length].match(/[&|]/) == null || transStrRes[hexNumberPos + activeNumStr.length] === transStrRes[hexNumberPos + activeNumStr.length + 1]) &&
-				(transStrRes[hexNumberPos + activeNumStr.length].match(/[<>]/) == null || transStrRes[hexNumberPos + activeNumStr.length] !== transStrRes[hexNumberPos + activeNumStr.length + 1])
-			) {
-				// console.log("√", hexNumberPos, activeNumStr);
-				statement = statement.replaceWithStr(hexNumberPos, hexNumberPos + activeNumStr.length, parseInt(activeNumStr, 16));
-			} else {
-				// console.log("×", hexNumberPos, activeNumStr, "[", transStrRes[hexNumberPos - 1], ",", transStrRes[hexNumberPos + activeNumStr.length], "]");
+
+		let transStrRes;
+
+		// 合并字符串（'spl'+'it' --> 'split'）
+		if (config["optionalFunction"]["MergeString"]) {
+			transStrRes = transStr(statement);
+			let multiStrPos = Number.POSITIVE_INFINITY;
+			while ((multiStrPos = transStrRes.lastSearchOf(/S'\+'S/, multiStrPos - 1)) !== -1) {
+				logger.weakUpdate();
+				statement = statement.replaceWithStr(multiStrPos + 1, multiStrPos + 4, "");
 			}
 		}
 
-		transStrRes = transStr(statement);
-		let objIndexerPos = Number.POSITIVE_INFINITY;
-		while ((objIndexerPos = transStrRes.lastSearchOf(/\['S*.']/, objIndexerPos - 1)) !== -1) {
-			logger.weakUpdate();
-			let activeIndexerStr = transStrRes.slice(objIndexerPos).match(/\['(S)*.']/)[0];
-			let leftSplitter, rightSplitter;
+		// 转换十六进制数字（0x1 --> 1）
+		if (config["optionalFunction"]["ConvertHex"]) {
+			transStrRes = transStr(statement);
+			let hexNumberPos = Number.POSITIVE_INFINITY;
+			while ((hexNumberPos = transStrRes.lastSearchOf(/0x[0-9a-fA-F]*/, hexNumberPos - 1)) !== -1) {
+				logger.weakUpdate();
+				let activeNumStr = transStrRes.slice(hexNumberPos).match(/0x([0-9a-fA-F])*/)[0];
+				// ^~是位运算符，此处排除
+				let checkNumberRegexp = /[{}\[\]().,+\-*\/!<>%=&|?:; ]/;
+				if (
+					transStrRes[hexNumberPos - 1].match(checkNumberRegexp) != null &&
+					(transStrRes[hexNumberPos - 1].match(/[&|]/) == null || transStrRes[hexNumberPos - 1] === transStrRes[hexNumberPos - 2]) &&
+					(transStrRes[hexNumberPos - 1].match(/[<>]/) == null || transStrRes[hexNumberPos - 1] !== transStrRes[hexNumberPos - 2]) &&
+					transStrRes[hexNumberPos + activeNumStr.length].match(checkNumberRegexp) != null &&
+					(transStrRes[hexNumberPos + activeNumStr.length].match(/[&|]/) == null || transStrRes[hexNumberPos + activeNumStr.length] === transStrRes[hexNumberPos + activeNumStr.length + 1]) &&
+					(transStrRes[hexNumberPos + activeNumStr.length].match(/[<>]/) == null || transStrRes[hexNumberPos + activeNumStr.length] !== transStrRes[hexNumberPos + activeNumStr.length + 1])
+				) {
+					statement = statement.replaceWithStr(hexNumberPos, hexNumberPos + activeNumStr.length, parseInt(activeNumStr, 16));
+				}
+			}
+		}
 
-			let isAheadRegexp = (() => {
-				if (transStrRes[objIndexerPos - 1] !== "/") {
-					return false;
-				}
-				let lastRegExpPos = transStrRes.lastSearchOf(/\/S*\//, objIndexerPos);
-				if (lastRegExpPos === -1) {
-					return false;
-				} else {
-					let activeRegExpStr = transStrRes.slice(lastRegExpPos).match(/\/(S)*\//)[0];
-					return lastRegExpPos + activeRegExpStr.length === objIndexerPos;
-				}
-			})();
-			if ((() => { // 123['toString']() -×-> 123.toString()
-					if (!transStrRes[objIndexerPos - 1].match(/[0-9.]/)) {
+		// 替换索引器（Object['keys'] --> Object.keys）
+		if (config["optionalFunction"]["ReplaceIndexer"]) {
+			transStrRes = transStr(statement);
+			let objIndexerPos = Number.POSITIVE_INFINITY;
+			while ((objIndexerPos = transStrRes.lastSearchOf(/\['S*.']/, objIndexerPos - 1)) !== -1) {
+				logger.weakUpdate();
+				let activeIndexerStr = transStrRes.slice(objIndexerPos).match(/\['(S)*.']/)[0];
+				let leftSplitter, rightSplitter;
+
+				let isAheadRegexp = (() => {
+					if (transStrRes[objIndexerPos - 1] !== "/") {
 						return false;
 					}
-					let pos = objIndexerPos;
-					while (--pos) {
-						if (!transStrRes[pos].match(/[0-9.]/)) {
-							return !!transStrRes[pos].match(/[{}\[\]().,+\-*\/~!%<>=&|^?:; @]/);
-						}
-					}
-				})() ||
-				transStrRes[objIndexerPos - 1].match(/[{}\[(,+\-*~!%<>=&|^?:;@]/) || // [['t']] -×-> [.t] （此时是字符串数组）
-				transStrRes[objIndexerPos + activeIndexerStr.length].match(/[`'"]/) || // ['t']"a" -×-> t."a" （忘了为什么了）
-				(!isAheadRegexp && transStrRes[objIndexerPos - 1] === '/') || // 1 / ['t'] -×-> 1 /.t （此时是字符串数组）
-				!statement.slice(objIndexerPos + 2, objIndexerPos + activeIndexerStr.length - 2).match(/^[^\u0030-\u0039\u00b7\u0300-\u036f\u0387\u0483-\u0487\u0591-\u05bd\u05bf\u05c1-\u05c2\u05c4-\u05c5\u05c7\u0610-\u061a\u064b-\u0669\u0670\u06d6-\u06dc\u06df-\u06e4\u06e7-\u06e8\u06ea-\u06ed\u06f0-\u06f9\u0711\u0730-\u074a\u07a6-\u07b0\u07c0-\u07c9\u07eb-\u07f3\u07fd\u0816-\u0819\u081b-\u0823\u0825-\u0827\u0829-\u082d\u0859-\u085b\u0898-\u089f\u08ca-\u08e1\u08e3-\u0903\u093a-\u093c\u093e-\u094f\u0951-\u0957\u0962-\u0963\u0966-\u096f\u0981-\u0983\u09bc\u09be-\u09c4\u09c7-\u09c8\u09cb-\u09cd\u09d7\u09e2-\u09e3\u09e6-\u09ef\u09fe\u0a01-\u0a03\u0a3c\u0a3e-\u0a42\u0a47-\u0a48\u0a4b-\u0a4d\u0a51\u0a66-\u0a71\u0a75\u0a81-\u0a83\u0abc\u0abe-\u0ac5\u0ac7-\u0ac9\u0acb-\u0acd\u0ae2-\u0ae3\u0ae6-\u0aef\u0afa-\u0aff\u0b01-\u0b03\u0b3c\u0b3e-\u0b44\u0b47-\u0b48\u0b4b-\u0b4d\u0b55-\u0b57\u0b62-\u0b63\u0b66-\u0b6f\u0b82\u0bbe-\u0bc2\u0bc6-\u0bc8\u0bca-\u0bcd\u0bd7\u0be6-\u0bef\u0c00-\u0c04\u0c3c\u0c3e-\u0c44\u0c46-\u0c48\u0c4a-\u0c4d\u0c55-\u0c56\u0c62-\u0c63\u0c66-\u0c6f\u0c81-\u0c83\u0cbc\u0cbe-\u0cc4\u0cc6-\u0cc8\u0cca-\u0ccd\u0cd5-\u0cd6\u0ce2-\u0ce3\u0ce6-\u0cef\u0d00-\u0d03\u0d3b-\u0d3c\u0d3e-\u0d44\u0d46-\u0d48\u0d4a-\u0d4d\u0d57\u0d62-\u0d63\u0d66-\u0d6f\u0d81-\u0d83\u0dca\u0dcf-\u0dd4\u0dd6\u0dd8-\u0ddf\u0de6-\u0def\u0df2-\u0df3\u0e31\u0e34-\u0e3a\u0e47-\u0e4e\u0e50-\u0e59\u0eb1\u0eb4-\u0ebc\u0ec8-\u0ecd\u0ed0-\u0ed9\u0f18-\u0f19\u0f20-\u0f29\u0f35\u0f37\u0f39\u0f3e-\u0f3f\u0f71-\u0f84\u0f86-\u0f87\u0f8d-\u0f97\u0f99-\u0fbc\u0fc6\u102b-\u103e\u1040-\u1049\u1056-\u1059\u105e-\u1060\u1062-\u1064\u1067-\u106d\u1071-\u1074\u1082-\u108d\u108f-\u109d\u135d-\u135f\u1369-\u1371\u1712-\u1715\u1732-\u1734\u1752-\u1753\u1772-\u1773\u17b4-\u17d3\u17dd\u17e0-\u17e9\u180b-\u180d\u180f-\u1819\u18a9\u1920-\u192b\u1930-\u193b\u1946-\u194f\u19d0-\u19da\u1a17-\u1a1b\u1a55-\u1a5e\u1a60-\u1a7c\u1a7f-\u1a89\u1a90-\u1a99\u1ab0-\u1abd\u1abf-\u1ace\u1b00-\u1b04\u1b34-\u1b44\u1b50-\u1b59\u1b6b-\u1b73\u1b80-\u1b82\u1ba1-\u1bad\u1bb0-\u1bb9\u1be6-\u1bf3\u1c24-\u1c37\u1c40-\u1c49\u1c50-\u1c59\u1cd0-\u1cd2\u1cd4-\u1ce8\u1ced\u1cf4\u1cf7-\u1cf9\u1dc0-\u1dff\u200c-\u200d\u203f-\u2040\u2054\u20d0-\u20dc\u20e1\u20e5-\u20f0\u2cef-\u2cf1\u2d7f\u2de0-\u2dff\u302a-\u302f\u3099-\u309a\ua620-\ua629\ua66f\ua674-\ua67d\ua69e-\ua69f\ua6f0-\ua6f1\ua802\ua806\ua80b\ua823-\ua827\ua82c\ua880-\ua881\ua8b4-\ua8c5\ua8d0-\ua8d9\ua8e0-\ua8f1\ua8ff-\ua909\ua926-\ua92d\ua947-\ua953\ua980-\ua983\ua9b3-\ua9c0\ua9d0-\ua9d9\ua9e5\ua9f0-\ua9f9\uaa29-\uaa36\uaa43\uaa4c-\uaa4d\uaa50-\uaa59\uaa7b-\uaa7d\uaab0\uaab2-\uaab4\uaab7-\uaab8\uaabe-\uaabf\uaac1\uaaeb-\uaaef\uaaf5-\uaaf6\uabe3-\uabea\uabec-\uabed\uabf0-\uabf9\ufb1e\ufe00-\ufe0f\ufe20-\ufe2f\ufe33-\ufe34\ufe4d-\ufe4f\uff10-\uff19\uff3f][^\u0000-\u0023\u0025-\u002f\u003a-\u0040\u005b-\u005e\u0060\u007b-\u00a9\u00ab-\u00b4\u00b6\u00b8-\u00b9\u00bb-\u00bf\u00d7\u00f7\u02c2-\u02c5\u02d2-\u02df\u02e5-\u02eb\u02ed\u02ef-\u02ff\u0375\u0378-\u0379\u037e\u0380-\u0385\u038b\u038d\u03a2\u03f6\u0482\u0488-\u0489\u0530\u0557-\u0558\u055a-\u055f\u0589-\u0590\u05be\u05c0\u05c3\u05c6\u05c8-\u05cf\u05eb-\u05ee\u05f3-\u060f\u061b-\u061f\u066a-\u066d\u06d4\u06dd-\u06de\u06e9\u06fd-\u06fe\u0700-\u070f\u074b-\u074c\u07b2-\u07bf\u07f6-\u07f9\u07fb-\u07fc\u07fe-\u07ff\u082e-\u083f\u085c-\u085f\u086b-\u086f\u0888\u088f-\u0897\u08e2\u0964-\u0965\u0970\u0984\u098d-\u098e\u0991-\u0992\u09a9\u09b1\u09b3-\u09b5\u09ba-\u09bb\u09c5-\u09c6\u09c9-\u09ca\u09cf-\u09d6\u09d8-\u09db\u09de\u09e4-\u09e5\u09f2-\u09fb\u09fd\u09ff-\u0a00\u0a04\u0a0b-\u0a0e\u0a11-\u0a12\u0a29\u0a31\u0a34\u0a37\u0a3a-\u0a3b\u0a3d\u0a43-\u0a46\u0a49-\u0a4a\u0a4e-\u0a50\u0a52-\u0a58\u0a5d\u0a5f-\u0a65\u0a76-\u0a80\u0a84\u0a8e\u0a92\u0aa9\u0ab1\u0ab4\u0aba-\u0abb\u0ac6\u0aca\u0ace-\u0acf\u0ad1-\u0adf\u0ae4-\u0ae5\u0af0-\u0af8\u0b00\u0b04\u0b0d-\u0b0e\u0b11-\u0b12\u0b29\u0b31\u0b34\u0b3a-\u0b3b\u0b45-\u0b46\u0b49-\u0b4a\u0b4e-\u0b54\u0b58-\u0b5b\u0b5e\u0b64-\u0b65\u0b70\u0b72-\u0b81\u0b84\u0b8b-\u0b8d\u0b91\u0b96-\u0b98\u0b9b\u0b9d\u0ba0-\u0ba2\u0ba5-\u0ba7\u0bab-\u0bad\u0bba-\u0bbd\u0bc3-\u0bc5\u0bc9\u0bce-\u0bcf\u0bd1-\u0bd6\u0bd8-\u0be5\u0bf0-\u0bff\u0c0d\u0c11\u0c29\u0c3a-\u0c3b\u0c45\u0c49\u0c4e-\u0c54\u0c57\u0c5b-\u0c5c\u0c5e-\u0c5f\u0c64-\u0c65\u0c70-\u0c7f\u0c84\u0c8d\u0c91\u0ca9\u0cb4\u0cba-\u0cbb\u0cc5\u0cc9\u0cce-\u0cd4\u0cd7-\u0cdc\u0cdf\u0ce4-\u0ce5\u0cf0\u0cf3-\u0cff\u0d0d\u0d11\u0d45\u0d49\u0d4f-\u0d53\u0d58-\u0d5e\u0d64-\u0d65\u0d70-\u0d79\u0d80\u0d84\u0d97-\u0d99\u0db2\u0dbc\u0dbe-\u0dbf\u0dc7-\u0dc9\u0dcb-\u0dce\u0dd5\u0dd7\u0de0-\u0de5\u0df0-\u0df1\u0df4-\u0e00\u0e3b-\u0e3f\u0e4f\u0e5a-\u0e80\u0e83\u0e85\u0e8b\u0ea4\u0ea6\u0ebe-\u0ebf\u0ec5\u0ec7\u0ece-\u0ecf\u0eda-\u0edb\u0ee0-\u0eff\u0f01-\u0f17\u0f1a-\u0f1f\u0f2a-\u0f34\u0f36\u0f38\u0f3a-\u0f3d\u0f48\u0f6d-\u0f70\u0f85\u0f98\u0fbd-\u0fc5\u0fc7-\u0fff\u104a-\u104f\u109e-\u109f\u10c6\u10c8-\u10cc\u10ce-\u10cf\u10fb\u1249\u124e-\u124f\u1257\u1259\u125e-\u125f\u1289\u128e-\u128f\u12b1\u12b6-\u12b7\u12bf\u12c1\u12c6-\u12c7\u12d7\u1311\u1316-\u1317\u135b-\u135c\u1360-\u1368\u1372-\u137f\u1390-\u139f\u13f6-\u13f7\u13fe-\u1400\u166d-\u166e\u1680\u169b-\u169f\u16eb-\u16ed\u16f9-\u16ff\u1716-\u171e\u1735-\u173f\u1754-\u175f\u176d\u1771\u1774-\u177f\u17d4-\u17d6\u17d8-\u17db\u17de-\u17df\u17ea-\u180a\u180e\u181a-\u181f\u1879-\u187f\u18ab-\u18af\u18f6-\u18ff\u191f\u192c-\u192f\u193c-\u1945\u196e-\u196f\u1975-\u197f\u19ac-\u19af\u19ca-\u19cf\u19db-\u19ff\u1a1c-\u1a1f\u1a5f\u1a7d-\u1a7e\u1a8a-\u1a8f\u1a9a-\u1aa6\u1aa8-\u1aaf\u1abe\u1acf-\u1aff\u1b4d-\u1b4f\u1b5a-\u1b6a\u1b74-\u1b7f\u1bf4-\u1bff\u1c38-\u1c3f\u1c4a-\u1c4c\u1c7e-\u1c7f\u1c89-\u1c8f\u1cbb-\u1cbc\u1cc0-\u1ccf\u1cd3\u1cfb-\u1cff\u1f16-\u1f17\u1f1e-\u1f1f\u1f46-\u1f47\u1f4e-\u1f4f\u1f58\u1f5a\u1f5c\u1f5e\u1f7e-\u1f7f\u1fb5\u1fbd\u1fbf-\u1fc1\u1fc5\u1fcd-\u1fcf\u1fd4-\u1fd5\u1fdc-\u1fdf\u1fed-\u1ff1\u1ff5\u1ffd-\u200b\u200e-\u203e\u2041-\u2053\u2055-\u2070\u2072-\u207e\u2080-\u208f\u209d-\u20cf\u20dd-\u20e0\u20e2-\u20e4\u20f1-\u2101\u2103-\u2106\u2108-\u2109\u2114\u2116-\u2117\u211e-\u2123\u2125\u2127\u2129\u213a-\u213b\u2140-\u2144\u214a-\u214d\u214f-\u215f\u2189-\u2bff\u2ce5-\u2cea\u2cf4-\u2cff\u2d26\u2d28-\u2d2c\u2d2e-\u2d2f\u2d68-\u2d6e\u2d70-\u2d7e\u2d97-\u2d9f\u2da7\u2daf\u2db7\u2dbf\u2dc7\u2dcf\u2dd7\u2ddf\u2e00-\u3004\u3008-\u3020\u3030\u3036-\u3037\u303d-\u3040\u3097-\u3098\u30a0\u30fb\u3100-\u3104\u3130\u318f-\u319f\u31c0-\u31ef\u3200-\u33ff\u4dc0-\u4dff\ua48d-\ua4cf\ua4fe-\ua4ff\ua60d-\ua60f\ua62c-\ua63f\ua670-\ua673\ua67e\ua6f2-\ua716\ua720-\ua721\ua789-\ua78a\ua7cb-\ua7cf\ua7d2\ua7d4\ua7da-\ua7f1\ua828-\ua82b\ua82d-\ua83f\ua874-\ua87f\ua8c6-\ua8cf\ua8da-\ua8df\ua8f8-\ua8fa\ua8fc\ua92e-\ua92f\ua954-\ua95f\ua97d-\ua97f\ua9c1-\ua9ce\ua9da-\ua9df\ua9ff\uaa37-\uaa3f\uaa4e-\uaa4f\uaa5a-\uaa5f\uaa77-\uaa79\uaac3-\uaada\uaade-\uaadf\uaaf0-\uaaf1\uaaf7-\uab00\uab07-\uab08\uab0f-\uab10\uab17-\uab1f\uab27\uab2f\uab5b\uab6a-\uab6f\uabeb\uabee-\uabef\uabfa-\uabff\ud7a4-\ud7af\ud7c7-\ud7ca\ud7fc-\uf8ff\ufa6e-\ufa6f\ufada-\ufaff\ufb07-\ufb12\ufb18-\ufb1c\ufb29\ufb37\ufb3d\ufb3f\ufb42\ufb45\ufbb2-\ufbd2\ufd3e-\ufd4f\ufd90-\ufd91\ufdc8-\ufdef\ufdfc-\ufdff\ufe10-\ufe1f\ufe30-\ufe32\ufe35-\ufe4c\ufe50-\ufe6f\ufe75\ufefd-\uff0f\uff1a-\uff20\uff3b-\uff3e\uff40\uff5b-\uff65\uffbf-\uffc1\uffc8-\uffc9\uffd0-\uffd1\uffd8-\uffd9\uffdd-\uffff]*$/) // ['1xx'] -×-> .1xx.
-			) {
-				// 特殊原因，不转换
-			} else {
-				// 右边要不要加点
-				if (transStrRes[objIndexerPos + activeIndexerStr.length].match(/[^{}\[\]().,+\-*\/~!%<>=&|^?:; ]/) != null) {
-					// console.log("√ R", objIndexerPos, activeIndexerStr);
-					rightSplitter = ".";
-				} else {
-					// console.log("× R", objIndexerPos, activeIndexerStr, "[", transStrRes[objIndexerPos - 1], ",", transStrRes[objIndexerPos + activeIndexerStr.length], "]");
-					rightSplitter = "";
-				}
-				statement = statement.replaceWithStr(objIndexerPos + activeIndexerStr.length - 2, objIndexerPos + activeIndexerStr.length, rightSplitter);
-				transStrRes = transStrRes.replaceWithStr(objIndexerPos + activeIndexerStr.length - 2, objIndexerPos + activeIndexerStr.length, rightSplitter);
-
-				// 左边要不要加点
-				if (transStrRes[objIndexerPos - 1] === "/") {
 					let lastRegExpPos = transStrRes.lastSearchOf(/\/S*\//, objIndexerPos);
 					if (lastRegExpPos === -1) {
-						leftSplitter = "";
-						// console.log("× E", objIndexerPos, activeIndexerStr);
+						return false;
 					} else {
 						let activeRegExpStr = transStrRes.slice(lastRegExpPos).match(/\/(S)*\//)[0];
-						if (lastRegExpPos + activeRegExpStr.length === objIndexerPos) {
-							leftSplitter = ".";
-							// console.log("√ E", objIndexerPos, activeIndexerStr);
-						} else {
+						return lastRegExpPos + activeRegExpStr.length === objIndexerPos;
+					}
+				})();
+				if ((() => { // 123['toString']() -×-> 123.toString()
+						if (!transStrRes[objIndexerPos - 1].match(/[0-9.]/)) {
+							return false;
+						}
+						let pos = objIndexerPos;
+						while (--pos) {
+							if (!transStrRes[pos].match(/[0-9.]/)) {
+								return !!transStrRes[pos].match(/[{}\[\]().,+\-*\/~!%<>=&|^?:; @]/);
+							}
+						}
+					})() ||
+					transStrRes[objIndexerPos - 1].match(/[{}\[(,+\-*~!%<>=&|^?:;@]/) || // [['t']] -×-> [.t] （此时是字符串数组）
+					transStrRes[objIndexerPos + activeIndexerStr.length].match(/[`'"]/) || // ['t']"a" -×-> t."a" （忘了为什么了）
+					(!isAheadRegexp && transStrRes[objIndexerPos - 1] === '/') || // 1 / ['t'] -×-> 1 /.t （此时是字符串数组）
+					!statement.slice(objIndexerPos + 2, objIndexerPos + activeIndexerStr.length - 2).match(/^[^\u0030-\u0039\u00b7\u0300-\u036f\u0387\u0483-\u0487\u0591-\u05bd\u05bf\u05c1-\u05c2\u05c4-\u05c5\u05c7\u0610-\u061a\u064b-\u0669\u0670\u06d6-\u06dc\u06df-\u06e4\u06e7-\u06e8\u06ea-\u06ed\u06f0-\u06f9\u0711\u0730-\u074a\u07a6-\u07b0\u07c0-\u07c9\u07eb-\u07f3\u07fd\u0816-\u0819\u081b-\u0823\u0825-\u0827\u0829-\u082d\u0859-\u085b\u0898-\u089f\u08ca-\u08e1\u08e3-\u0903\u093a-\u093c\u093e-\u094f\u0951-\u0957\u0962-\u0963\u0966-\u096f\u0981-\u0983\u09bc\u09be-\u09c4\u09c7-\u09c8\u09cb-\u09cd\u09d7\u09e2-\u09e3\u09e6-\u09ef\u09fe\u0a01-\u0a03\u0a3c\u0a3e-\u0a42\u0a47-\u0a48\u0a4b-\u0a4d\u0a51\u0a66-\u0a71\u0a75\u0a81-\u0a83\u0abc\u0abe-\u0ac5\u0ac7-\u0ac9\u0acb-\u0acd\u0ae2-\u0ae3\u0ae6-\u0aef\u0afa-\u0aff\u0b01-\u0b03\u0b3c\u0b3e-\u0b44\u0b47-\u0b48\u0b4b-\u0b4d\u0b55-\u0b57\u0b62-\u0b63\u0b66-\u0b6f\u0b82\u0bbe-\u0bc2\u0bc6-\u0bc8\u0bca-\u0bcd\u0bd7\u0be6-\u0bef\u0c00-\u0c04\u0c3c\u0c3e-\u0c44\u0c46-\u0c48\u0c4a-\u0c4d\u0c55-\u0c56\u0c62-\u0c63\u0c66-\u0c6f\u0c81-\u0c83\u0cbc\u0cbe-\u0cc4\u0cc6-\u0cc8\u0cca-\u0ccd\u0cd5-\u0cd6\u0ce2-\u0ce3\u0ce6-\u0cef\u0d00-\u0d03\u0d3b-\u0d3c\u0d3e-\u0d44\u0d46-\u0d48\u0d4a-\u0d4d\u0d57\u0d62-\u0d63\u0d66-\u0d6f\u0d81-\u0d83\u0dca\u0dcf-\u0dd4\u0dd6\u0dd8-\u0ddf\u0de6-\u0def\u0df2-\u0df3\u0e31\u0e34-\u0e3a\u0e47-\u0e4e\u0e50-\u0e59\u0eb1\u0eb4-\u0ebc\u0ec8-\u0ecd\u0ed0-\u0ed9\u0f18-\u0f19\u0f20-\u0f29\u0f35\u0f37\u0f39\u0f3e-\u0f3f\u0f71-\u0f84\u0f86-\u0f87\u0f8d-\u0f97\u0f99-\u0fbc\u0fc6\u102b-\u103e\u1040-\u1049\u1056-\u1059\u105e-\u1060\u1062-\u1064\u1067-\u106d\u1071-\u1074\u1082-\u108d\u108f-\u109d\u135d-\u135f\u1369-\u1371\u1712-\u1715\u1732-\u1734\u1752-\u1753\u1772-\u1773\u17b4-\u17d3\u17dd\u17e0-\u17e9\u180b-\u180d\u180f-\u1819\u18a9\u1920-\u192b\u1930-\u193b\u1946-\u194f\u19d0-\u19da\u1a17-\u1a1b\u1a55-\u1a5e\u1a60-\u1a7c\u1a7f-\u1a89\u1a90-\u1a99\u1ab0-\u1abd\u1abf-\u1ace\u1b00-\u1b04\u1b34-\u1b44\u1b50-\u1b59\u1b6b-\u1b73\u1b80-\u1b82\u1ba1-\u1bad\u1bb0-\u1bb9\u1be6-\u1bf3\u1c24-\u1c37\u1c40-\u1c49\u1c50-\u1c59\u1cd0-\u1cd2\u1cd4-\u1ce8\u1ced\u1cf4\u1cf7-\u1cf9\u1dc0-\u1dff\u200c-\u200d\u203f-\u2040\u2054\u20d0-\u20dc\u20e1\u20e5-\u20f0\u2cef-\u2cf1\u2d7f\u2de0-\u2dff\u302a-\u302f\u3099-\u309a\ua620-\ua629\ua66f\ua674-\ua67d\ua69e-\ua69f\ua6f0-\ua6f1\ua802\ua806\ua80b\ua823-\ua827\ua82c\ua880-\ua881\ua8b4-\ua8c5\ua8d0-\ua8d9\ua8e0-\ua8f1\ua8ff-\ua909\ua926-\ua92d\ua947-\ua953\ua980-\ua983\ua9b3-\ua9c0\ua9d0-\ua9d9\ua9e5\ua9f0-\ua9f9\uaa29-\uaa36\uaa43\uaa4c-\uaa4d\uaa50-\uaa59\uaa7b-\uaa7d\uaab0\uaab2-\uaab4\uaab7-\uaab8\uaabe-\uaabf\uaac1\uaaeb-\uaaef\uaaf5-\uaaf6\uabe3-\uabea\uabec-\uabed\uabf0-\uabf9\ufb1e\ufe00-\ufe0f\ufe20-\ufe2f\ufe33-\ufe34\ufe4d-\ufe4f\uff10-\uff19\uff3f][^\u0000-\u0023\u0025-\u002f\u003a-\u0040\u005b-\u005e\u0060\u007b-\u00a9\u00ab-\u00b4\u00b6\u00b8-\u00b9\u00bb-\u00bf\u00d7\u00f7\u02c2-\u02c5\u02d2-\u02df\u02e5-\u02eb\u02ed\u02ef-\u02ff\u0375\u0378-\u0379\u037e\u0380-\u0385\u038b\u038d\u03a2\u03f6\u0482\u0488-\u0489\u0530\u0557-\u0558\u055a-\u055f\u0589-\u0590\u05be\u05c0\u05c3\u05c6\u05c8-\u05cf\u05eb-\u05ee\u05f3-\u060f\u061b-\u061f\u066a-\u066d\u06d4\u06dd-\u06de\u06e9\u06fd-\u06fe\u0700-\u070f\u074b-\u074c\u07b2-\u07bf\u07f6-\u07f9\u07fb-\u07fc\u07fe-\u07ff\u082e-\u083f\u085c-\u085f\u086b-\u086f\u0888\u088f-\u0897\u08e2\u0964-\u0965\u0970\u0984\u098d-\u098e\u0991-\u0992\u09a9\u09b1\u09b3-\u09b5\u09ba-\u09bb\u09c5-\u09c6\u09c9-\u09ca\u09cf-\u09d6\u09d8-\u09db\u09de\u09e4-\u09e5\u09f2-\u09fb\u09fd\u09ff-\u0a00\u0a04\u0a0b-\u0a0e\u0a11-\u0a12\u0a29\u0a31\u0a34\u0a37\u0a3a-\u0a3b\u0a3d\u0a43-\u0a46\u0a49-\u0a4a\u0a4e-\u0a50\u0a52-\u0a58\u0a5d\u0a5f-\u0a65\u0a76-\u0a80\u0a84\u0a8e\u0a92\u0aa9\u0ab1\u0ab4\u0aba-\u0abb\u0ac6\u0aca\u0ace-\u0acf\u0ad1-\u0adf\u0ae4-\u0ae5\u0af0-\u0af8\u0b00\u0b04\u0b0d-\u0b0e\u0b11-\u0b12\u0b29\u0b31\u0b34\u0b3a-\u0b3b\u0b45-\u0b46\u0b49-\u0b4a\u0b4e-\u0b54\u0b58-\u0b5b\u0b5e\u0b64-\u0b65\u0b70\u0b72-\u0b81\u0b84\u0b8b-\u0b8d\u0b91\u0b96-\u0b98\u0b9b\u0b9d\u0ba0-\u0ba2\u0ba5-\u0ba7\u0bab-\u0bad\u0bba-\u0bbd\u0bc3-\u0bc5\u0bc9\u0bce-\u0bcf\u0bd1-\u0bd6\u0bd8-\u0be5\u0bf0-\u0bff\u0c0d\u0c11\u0c29\u0c3a-\u0c3b\u0c45\u0c49\u0c4e-\u0c54\u0c57\u0c5b-\u0c5c\u0c5e-\u0c5f\u0c64-\u0c65\u0c70-\u0c7f\u0c84\u0c8d\u0c91\u0ca9\u0cb4\u0cba-\u0cbb\u0cc5\u0cc9\u0cce-\u0cd4\u0cd7-\u0cdc\u0cdf\u0ce4-\u0ce5\u0cf0\u0cf3-\u0cff\u0d0d\u0d11\u0d45\u0d49\u0d4f-\u0d53\u0d58-\u0d5e\u0d64-\u0d65\u0d70-\u0d79\u0d80\u0d84\u0d97-\u0d99\u0db2\u0dbc\u0dbe-\u0dbf\u0dc7-\u0dc9\u0dcb-\u0dce\u0dd5\u0dd7\u0de0-\u0de5\u0df0-\u0df1\u0df4-\u0e00\u0e3b-\u0e3f\u0e4f\u0e5a-\u0e80\u0e83\u0e85\u0e8b\u0ea4\u0ea6\u0ebe-\u0ebf\u0ec5\u0ec7\u0ece-\u0ecf\u0eda-\u0edb\u0ee0-\u0eff\u0f01-\u0f17\u0f1a-\u0f1f\u0f2a-\u0f34\u0f36\u0f38\u0f3a-\u0f3d\u0f48\u0f6d-\u0f70\u0f85\u0f98\u0fbd-\u0fc5\u0fc7-\u0fff\u104a-\u104f\u109e-\u109f\u10c6\u10c8-\u10cc\u10ce-\u10cf\u10fb\u1249\u124e-\u124f\u1257\u1259\u125e-\u125f\u1289\u128e-\u128f\u12b1\u12b6-\u12b7\u12bf\u12c1\u12c6-\u12c7\u12d7\u1311\u1316-\u1317\u135b-\u135c\u1360-\u1368\u1372-\u137f\u1390-\u139f\u13f6-\u13f7\u13fe-\u1400\u166d-\u166e\u1680\u169b-\u169f\u16eb-\u16ed\u16f9-\u16ff\u1716-\u171e\u1735-\u173f\u1754-\u175f\u176d\u1771\u1774-\u177f\u17d4-\u17d6\u17d8-\u17db\u17de-\u17df\u17ea-\u180a\u180e\u181a-\u181f\u1879-\u187f\u18ab-\u18af\u18f6-\u18ff\u191f\u192c-\u192f\u193c-\u1945\u196e-\u196f\u1975-\u197f\u19ac-\u19af\u19ca-\u19cf\u19db-\u19ff\u1a1c-\u1a1f\u1a5f\u1a7d-\u1a7e\u1a8a-\u1a8f\u1a9a-\u1aa6\u1aa8-\u1aaf\u1abe\u1acf-\u1aff\u1b4d-\u1b4f\u1b5a-\u1b6a\u1b74-\u1b7f\u1bf4-\u1bff\u1c38-\u1c3f\u1c4a-\u1c4c\u1c7e-\u1c7f\u1c89-\u1c8f\u1cbb-\u1cbc\u1cc0-\u1ccf\u1cd3\u1cfb-\u1cff\u1f16-\u1f17\u1f1e-\u1f1f\u1f46-\u1f47\u1f4e-\u1f4f\u1f58\u1f5a\u1f5c\u1f5e\u1f7e-\u1f7f\u1fb5\u1fbd\u1fbf-\u1fc1\u1fc5\u1fcd-\u1fcf\u1fd4-\u1fd5\u1fdc-\u1fdf\u1fed-\u1ff1\u1ff5\u1ffd-\u200b\u200e-\u203e\u2041-\u2053\u2055-\u2070\u2072-\u207e\u2080-\u208f\u209d-\u20cf\u20dd-\u20e0\u20e2-\u20e4\u20f1-\u2101\u2103-\u2106\u2108-\u2109\u2114\u2116-\u2117\u211e-\u2123\u2125\u2127\u2129\u213a-\u213b\u2140-\u2144\u214a-\u214d\u214f-\u215f\u2189-\u2bff\u2ce5-\u2cea\u2cf4-\u2cff\u2d26\u2d28-\u2d2c\u2d2e-\u2d2f\u2d68-\u2d6e\u2d70-\u2d7e\u2d97-\u2d9f\u2da7\u2daf\u2db7\u2dbf\u2dc7\u2dcf\u2dd7\u2ddf\u2e00-\u3004\u3008-\u3020\u3030\u3036-\u3037\u303d-\u3040\u3097-\u3098\u30a0\u30fb\u3100-\u3104\u3130\u318f-\u319f\u31c0-\u31ef\u3200-\u33ff\u4dc0-\u4dff\ua48d-\ua4cf\ua4fe-\ua4ff\ua60d-\ua60f\ua62c-\ua63f\ua670-\ua673\ua67e\ua6f2-\ua716\ua720-\ua721\ua789-\ua78a\ua7cb-\ua7cf\ua7d2\ua7d4\ua7da-\ua7f1\ua828-\ua82b\ua82d-\ua83f\ua874-\ua87f\ua8c6-\ua8cf\ua8da-\ua8df\ua8f8-\ua8fa\ua8fc\ua92e-\ua92f\ua954-\ua95f\ua97d-\ua97f\ua9c1-\ua9ce\ua9da-\ua9df\ua9ff\uaa37-\uaa3f\uaa4e-\uaa4f\uaa5a-\uaa5f\uaa77-\uaa79\uaac3-\uaada\uaade-\uaadf\uaaf0-\uaaf1\uaaf7-\uab00\uab07-\uab08\uab0f-\uab10\uab17-\uab1f\uab27\uab2f\uab5b\uab6a-\uab6f\uabeb\uabee-\uabef\uabfa-\uabff\ud7a4-\ud7af\ud7c7-\ud7ca\ud7fc-\uf8ff\ufa6e-\ufa6f\ufada-\ufaff\ufb07-\ufb12\ufb18-\ufb1c\ufb29\ufb37\ufb3d\ufb3f\ufb42\ufb45\ufbb2-\ufbd2\ufd3e-\ufd4f\ufd90-\ufd91\ufdc8-\ufdef\ufdfc-\ufdff\ufe10-\ufe1f\ufe30-\ufe32\ufe35-\ufe4c\ufe50-\ufe6f\ufe75\ufefd-\uff0f\uff1a-\uff20\uff3b-\uff3e\uff40\uff5b-\uff65\uffbf-\uffc1\uffc8-\uffc9\uffd0-\uffd1\uffd8-\uffd9\uffdd-\uffff]*$/) // ['1xx'] -×-> .1xx.
+				) {
+					// 特殊原因，不转换
+				} else {
+					// 右边要不要加点
+					if (transStrRes[objIndexerPos + activeIndexerStr.length].match(/[^{}\[\]().,+\-*\/~!%<>=&|^?:; ]/) != null) {
+						// console.log("√ R", objIndexerPos, activeIndexerStr);
+						rightSplitter = ".";
+					} else {
+						// console.log("× R", objIndexerPos, activeIndexerStr, "[", transStrRes[objIndexerPos - 1], ",", transStrRes[objIndexerPos + activeIndexerStr.length], "]");
+						rightSplitter = "";
+					}
+					statement = statement.replaceWithStr(objIndexerPos + activeIndexerStr.length - 2, objIndexerPos + activeIndexerStr.length, rightSplitter);
+					transStrRes = transStrRes.replaceWithStr(objIndexerPos + activeIndexerStr.length - 2, objIndexerPos + activeIndexerStr.length, rightSplitter);
+
+					// 左边要不要加点
+					if (transStrRes[objIndexerPos - 1] === "/") {
+						let lastRegExpPos = transStrRes.lastSearchOf(/\/S*\//, objIndexerPos);
+						if (lastRegExpPos === -1) {
 							leftSplitter = "";
 							// console.log("× E", objIndexerPos, activeIndexerStr);
+						} else {
+							let activeRegExpStr = transStrRes.slice(lastRegExpPos).match(/\/(S)*\//)[0];
+							if (lastRegExpPos + activeRegExpStr.length === objIndexerPos) {
+								leftSplitter = ".";
+								// console.log("√ E", objIndexerPos, activeIndexerStr);
+							} else {
+								leftSplitter = "";
+								// console.log("× E", objIndexerPos, activeIndexerStr);
+							}
 						}
+					} else if (transStrRes[objIndexerPos - 1].match(/[^{\[(.,+\-*~!%<>=&|^?:; ]/) != null) {
+						// console.log("√ L", objIndexerPos, activeIndexerStr);
+						leftSplitter = ".";
+					} else {
+						// console.log("× L", objIndexerPos, activeIndexerStr, "[", transStrRes[objIndexerPos - 1], ",", transStrRes[objIndexerPos + activeIndexerStr.length], "]");
+						leftSplitter = "";
 					}
-				} else if (transStrRes[objIndexerPos - 1].match(/[^{\[(.,+\-*~!%<>=&|^?:; ]/) != null) {
-					// console.log("√ L", objIndexerPos, activeIndexerStr);
-					leftSplitter = ".";
-				} else {
-					// console.log("× L", objIndexerPos, activeIndexerStr, "[", transStrRes[objIndexerPos - 1], ",", transStrRes[objIndexerPos + activeIndexerStr.length], "]");
-					leftSplitter = "";
+					statement = statement.replaceWithStr(objIndexerPos, objIndexerPos + 2, leftSplitter);
+					transStrRes = transStrRes.replaceWithStr(objIndexerPos, objIndexerPos + 2, leftSplitter);
 				}
-				statement = statement.replaceWithStr(objIndexerPos, objIndexerPos + 2, leftSplitter);
-				transStrRes = transStrRes.replaceWithStr(objIndexerPos, objIndexerPos + 2, leftSplitter);
 			}
 		}
 
-		transStrRes = transStr(statement);
-		// console.log("trans: ", transStrRes);
-		let hexCharRes = Number.POSITIVE_INFINITY;
-		// console.log("first: ", transStrRes.lastSearchOf(/'S+'/, hexCharRes - 1));
-		while ((hexCharRes = transStrRes.lastSearchOf(/'S+'/, hexCharRes - 1)) !== -1) {
-			logger.weakUpdate();
-			let activeStr = transStrRes.slice(hexCharRes++).match(/'S+'/)[0];
-			// console.log("raw: ", transStrRes.slice(hexCharRes - 1, hexCharRes + activeStr.length - 1), statement.slice(hexCharRes - 1, hexCharRes + activeStr.length - 1));
-			// console.log("result: ", decodeStr(statement.slice(hexCharRes, hexCharRes + activeStr.length - 2)));
-			statement = statement.replaceWithStr(hexCharRes, hexCharRes + activeStr.length - 2, decodeStr(statement.slice(hexCharRes, hexCharRes + activeStr.length - 2)));
+		// 转换Unicode字符（\x22 --> "）
+		if (config["optionalFunction"]["ConvertUnicode"]) {
+			transStrRes = transStr(statement);
+			let hexCharRes = Number.POSITIVE_INFINITY;
+			while ((hexCharRes = transStrRes.lastSearchOf(/'S+'/, hexCharRes - 1)) !== -1) {
+				logger.weakUpdate();
+				let activeStr = transStrRes.slice(hexCharRes++).match(/'S+'/)[0];
+				statement = statement.replaceWithStr(hexCharRes, hexCharRes + activeStr.length - 2, decodeStr(statement.slice(hexCharRes, hexCharRes + activeStr.length - 2)));
+			}
 		}
 
 		return statement;
@@ -1342,6 +1375,9 @@ function findAndFormatCodeBlock(jsArr, layer, isShowProgress) {
 						});
 					}
 					jsStr = jsStr.replaceWithStr(startPos + 1, endPos, padTabs + findAndFormatCodeBlock(splitStatementsRes, layer + 1).join(padTabs) + padTabs.slice(0, -1));
+				} else {
+					let padTabs = "\n" + "".padEnd(layer + prefixCount, "\t");
+					jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndFormatCodeBlock([jsStr.slice(startPos + 1, endPos)], layer+1).join(padTabs));
 				}
 				continue;
 			}
