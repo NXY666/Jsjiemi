@@ -1,7 +1,7 @@
 /**
  * JS解密工具
  * @author NXY666
- * @version 2.10.1
+ * @version 2.10.2
  */
 const fs = require("fs");
 const readline = require("readline");
@@ -354,8 +354,8 @@ function transStr(jsStr) {
 	}
 	return jsArr.join("");
 }
-function transLayer(jsStr, layer) {
-	jsStr = transStr(jsStr);
+function transLayer(jsStr, layer, hasTrans) {
+	jsStr = hasTrans ? jsStr : transStr(jsStr);
 	if (layer === undefined) {
 		layer = 1;
 	}
@@ -974,15 +974,25 @@ function getCodeBlockDecryptorName(jsStr) {
 		return false;
 	}
 
-	let transStrRes = transLayer(jsStr, 2);
-	let checkRes = transStrRes.slice(transStrRes.indexOf("{") + 1, transStrRes.lastIndexOf("}")).split(",").every(function (objectItem) {
-		let checkRes = objectItem.match(/'(S)*':('(S)*'|function\((Q)*\){(Q)*})/);
-		return checkRes && checkRes[0] === objectItem;
+	let transStrRes = transStr(jsStr), transLayerRes = transLayer(transStrRes, 2, true);
+	let startPos = transLayerRes.indexOf("{") + 1, endPos = transLayerRes.lastIndexOf("}"), strScanLen = 0;
+
+	transStrRes = transStrRes.slice(startPos, endPos);
+	let checkRes = transLayerRes.slice(startPos, endPos).split(",").every(function (objectItem) {
+		let itemTransRes = transStrRes.slice(strScanLen, strScanLen + objectItem.length);
+		let checkRes = objectItem.match(/^'(S)+':('(S)+'|function\((Q)*\)\{(Q)*})$/);
+		if (checkRes) {
+			if (objectItem.indexOf("function") !== -1) {
+				checkRes = itemTransRes.match(/function\([^)]*\)\{return[^;]*;}/);
+			}
+		}
+		strScanLen += objectItem.length + 1;
+		return checkRes;
 	});
 	if (checkRes) {
 		// fs.appendFileSync("res.txt", "检查通过:" + jsStr.slice(0, 100) + "\n");
 		// console.log("检查通过:", jsStr.slice(0, 100));
-		return transStrRes.slice(4, transStrRes.indexOf("="));
+		return transLayerRes.slice(4, transLayerRes.indexOf("="));
 	} else {
 		// fs.appendFileSync("res.txt", "非加密对象:" + jsStr + "\n");
 		// console.warn("非加密对象:", jsStr);
@@ -1004,7 +1014,8 @@ function replaceDecryptorFunc(callObjName, callFuncName, callStr, ignoreQuoteOut
 	let funcParams = funcStr.slice(transFuncStr.indexOf("(") + 1, transFuncStr.indexOf(")")).splitByOtherStr(transFuncStr.slice(transFuncStr.indexOf("(") + 1, transFuncStr.indexOf(")")), ",");
 
 	// 获取调用解密函数的参数列表
-	let transCallLayer = transLayer(callStr), transCallLayer2 = transLayer(callStr, 2);
+	let transCallStr = transStr(callStr);
+	let transCallLayer = transLayer(transCallStr, 1, true), transCallLayer2 = transLayer(transCallStr, 2, true);
 	let callParamsStr = callStr.slice(transCallLayer.indexOf("(") + 1, transCallLayer.indexOf(")"));
 	let callParams = callParamsStr.splitByOtherStr(transCallLayer2.slice(transCallLayer.indexOf("(") + 1, transCallLayer.indexOf(")")), ",");
 	if (funcParams.length !== callParams.length) {
@@ -1015,7 +1026,7 @@ function replaceDecryptorFunc(callObjName, callFuncName, callStr, ignoreQuoteOut
 	funcParams.forEach(function (param, index) {
 		replacePos = transStr(funcResStr).replace(/SQ/g, " ").indexOf(param, replacePos);
 		funcResStr = funcResStr.slice(0, replacePos) + funcResStr.slice(replacePos).replace(param, callParams[index].replace(/\$/g, "$$$$"));
-		replacePos = replacePos + param.length;
+		replacePos = replacePos + callParams[index].length;
 	});
 
 	if ((funcParams.length === 2 && !transFuncStr.endsWith(");}")) && !ignoreQuoteOutside) {
@@ -1064,7 +1075,7 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 			transStrRes = transStr(jsStr);
 
 			let decryptorPos = Number.POSITIVE_INFINITY;
-			while ((decryptorPos === Number.POSITIVE_INFINITY || decryptorPos - 1 >= 0) && (decryptorPos = transStrRes.lastSearchOf(new RegExp(decryptorObjName + "\\['.+?']"), decryptorPos - 1)) !== -1) {
+			while ((decryptorPos === Number.POSITIVE_INFINITY || decryptorPos - 1 >= 0) && (decryptorPos = transStrRes.lastSearchOf(new RegExp(decryptorObjName.replace(/\$/g, "\\$") + "\\['.+?']"), decryptorPos - 1)) !== -1) {
 				let leftSquarePos = transStrRes.indexOf("[", decryptorPos),
 					rightSquarePos = transStrRes.indexOf("]", decryptorPos);
 
@@ -1155,7 +1166,7 @@ function clearDeadCodes(jsArr, isShowProgress) {
 	}
 	if (jsArr.length === 1) {
 		// if死代码
-		let transStrRes = transStr(jsArr[0]), transLayerRes = transLayer(jsArr[0]);
+		let transStrRes = transStr(jsArr[0]), transLayerRes = transLayer(transStrRes, 1, true);
 		if (/^if\('S+'[=!]=='S+'\)/.test(transStrRes)) {
 			let transFakeIfStr = transLayerRes.match(/if\(Q*\){Q*}else{Q*}/)[0];
 			return clearDeadCodes(splitStatements(simplifyIf(jsArr[0].slice(0, transFakeIfStr.length)), "COMMON"));
