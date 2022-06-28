@@ -6,10 +6,10 @@
 
 ## 仓库地址
 
-> Gitee仓库为Github的同步仓库，更新可能会有延迟。
+> Gitee 仓库为 Github 的同步仓库，更新可能会有延迟。
 
-* Github仓库：https://github.com/NXY666/JsjiamiV6-Decryptor.git
-* Gitee仓库：https://gitee.com/NXY666/JsjiamiV6-Decryptor.git
+* Github 仓库：https://github.com/NXY666/JsjiamiV6-Decryptor.git
+* Gitee 仓库：https://gitee.com/NXY666/JsjiamiV6-Decryptor.git
 
 ## 解密效果
 
@@ -319,11 +319,11 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 * 解除全局加密
 
-    * 该步骤还原类似 `_0x51f5('7', 'Ik*@')` 的加密内容。
+    * 还原类似 `_0x51f5('7', 'Ik*@')` 的加密内容。
 
 * 解除代码块加密
 
-    * 该步骤还原代码块中被统一收集的字符串及运算符。
+    * 还原代码块中被统一收集的字符串及运算符。
 
 * 清理死代码（花指令）
 
@@ -378,8 +378,8 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 ## 开发计划
 
-> 写腻了，不想写了……
+> 嘿嘿，`Minecraft: Dungeons`真好玩，摆烂~~~
 
-- [ ] 摆烂：阿巴阿巴阿巴……
+- [ ] 新增：支持移除禁用控制台等限制功能
 - [ ] 问题：解除代码块加密时第二个变量包含运算符时可能出现优先级错误
 - [ ] 问题：代码字符串被拆分与分组导致加密对象无法识别的问题（缺乏例子）
