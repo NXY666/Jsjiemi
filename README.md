@@ -378,7 +378,7 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 ## 开发计划
 
-> 嘿嘿，Minecraft: Dungeons 真好玩，摆烂~~~
+> 嘿嘿，`Minecraft: Dungeons`真好玩，摆烂~~~
 
 - [ ] 新增：支持移除禁用控制台等限制功能
 - [ ] 问题：解除代码块加密时第二个变量包含运算符时可能出现优先级错误
