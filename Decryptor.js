@@ -1,7 +1,7 @@
 /**
  * JsjiamiV6解密工具
  * @author NXY666
- * @version 2.7.2
+ * @version 2.7.4
  */
 const fs = require("fs");
 const readline = require("readline");
@@ -310,7 +310,7 @@ function transStr(jsStr) {
 					signStack.pop();
 					continue;
 				} else if (signStack.length === 0) {
-					// [{( +-* <>=? &|! ~^
+					// [{( +-* <>=? &|! ~^ ,
 					if (jsArr[nowPos + 1] === '*') {
 						// 块注释
 						let endPos = jsStr.indexOf("*/", nowPos);
@@ -321,7 +321,7 @@ function transStr(jsStr) {
 						let endPos = jsStr.searchOf(/(\n|\r|\n\r|\r\n)/, nowPos);
 						jsArr.fill("C", nowPos + 2, endPos);
 						nowPos = endPos - 1;
-					} else if (nowPos === 0 || jsArr[jsStr.lastSearchOf(/\S/, nowPos - 1)].match(/[\[{(+\-*<>=?&|!~^:;]/)) {
+					} else if (nowPos === 0 || jsArr[jsStr.lastSearchOf(/\S/, nowPos - 1)].match(/[\[{(+\-*<>=?&|!~^:;,]/)) {
 						// 开始正则
 						signStack.push(jsArr[nowPos]);
 					}
@@ -982,23 +982,23 @@ function getCodeBlockDecryptorName(jsStr) {
 
 	// 先过一遍
 	if (!transLayerRes.match(/var _?[0-9a-zIQO$]+=\{Q+};/)) {
+		// fs.appendFileSync("res.txt", "局部格式检查不通过:" + jsStr.slice(0, 100) + "\n");
 		return false;
 	}
 
 	transStrRes = transStrRes.slice(startPos, endPos);
 	let checkRes = transLayer2Res.slice(startPos, endPos).split(",").every(function (objectItem) {
 		let itemTransRes = transStrRes.slice(strScanLen, strScanLen + objectItem.length);
-		let checkRes = objectItem.match(/^'(S)+':('(S)+'|function\((Q)*\)\{(Q)*})$/);
-		if (checkRes) {
-			if (objectItem.indexOf("function") !== -1) {
-				checkRes = itemTransRes.match(/function\([^)]*\)\{return[^;]*;}/);
-			}
+		let itemTransLayer2Res = transLayer(itemTransRes, 2, true);
+		if (objectItem.match(/^'(S)+':'(S)+'$/) || itemTransLayer2Res.match(/^'S+':function\([^)]*\)\{return[^;]*;}$/)) {
+			strScanLen += objectItem.length + 1;
+			return true;
+		} else {
+			return false;
 		}
-		strScanLen += objectItem.length + 1;
-		return checkRes;
 	});
 	if (checkRes) {
-		// fs.appendFileSync("res.txt", "检查通过:" + jsStr.slice(0, 100) + "\n");
+		// fs.appendFileSync("res.txt", "检查通过:" + jsStr + "\n");
 		// console.log("检查通过:", jsStr.slice(0, 100));
 		return transLayer2Res.slice(4, transLayer2Res.indexOf("="));
 	} else {
