@@ -1,0 +1,34 @@
+name: BUG反馈
+description: 反馈使用解密器的过程中遇到的错误和漏洞。
+labels:
+  - BUG
+assignees:
+  - NXY666
+body:
+  - type: dropdown
+    id: OperatingSystem
+    attributes:
+      label: 操作系统
+      description: 系统的差异可能导致兼容性问题，因此需要你提供遇到问题时使用的操作系统。
+      multiple: true
+      options:
+        - Windows
+        - Linux
+        - MacOS
+        - 其它
+    validations:
+      required: true
+  - type: textarea
+    id: Details
+    attributes:
+      label: 问题详情
+    validations:
+      required: true
+  - type: textarea
+    id: Code
+    attributes:
+      label: 目标代码
+      description: 不同的目标代码可能产生不同的解密效果。你可以`填写链接`或`粘贴代码`。
+      render: JavaScript
+    validations:
+      required: true

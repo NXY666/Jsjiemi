@@ -1,7 +1,7 @@
 /**
  * JS解密工具
  * @author NXY666
- * @version 2.10.4
+ * @version 2.11.0
  */
 const fs = require("fs");
 const readline = require("readline");
@@ -11,10 +11,11 @@ let vm2;
 
 /**
  * 获取数组末尾的值。
+ * @param {number} offset 偏移值。
  * @returns {any | undefined} 返回数组末尾的值。若数组为空，则返回undefined。
  */
-Array.prototype.top = function () {
-	return this[this.length - 1];
+Array.prototype.top = function (offset = 0) {
+	return this[this.length - 1 - offset];
 };
 
 /**
@@ -53,13 +54,9 @@ String.prototype.splitByOtherStr = function (str, separator) {
  * @param {number?} position 起始位置。若不指定则从 0 位置开始搜索。
  * @returns {number} 匹配到的索引值。若未匹配成功，则返回 -1。
  */
-String.prototype.searchOf = function (regexp, position) {
+String.prototype.searchOf = function (regexp, position = 0) {
 	if (typeof regexp == "string") {
 		return this.indexOf(regexp, position);
-	}
-
-	if (position === undefined) {
-		position = 0;
 	}
 
 	if (position < 0) {
@@ -68,24 +65,22 @@ String.prototype.searchOf = function (regexp, position) {
 		return -1;
 	}
 
-	return position + this.slice(position).search(regexp);
+	let searchRes = this.slice(position).search(regexp);
+	return searchRes === -1 ? -1 : position + searchRes;
 };
 
 /**
  * 使用正则表达式或字符串从字符串末尾的某一位置开始搜索字符串。
- * @param {RegExp|string} regexp 正则表达式。若为字符串则等同于 String.lastIndexOf 。
+ * @param {RegExp|string} regexp 正则表达式。若为字符串则等同于 String.lastIndexOf ，在该方法下贪婪模式不生效。
  * @param {number?} position 起始位置。若不指定则从 +Infinity 位置开始搜索。
  * @returns {number} 匹配到的索引值。若未匹配成功，则返回 -1。
  */
-String.prototype.lastSearchOf = function (regexp, position) {
-	if (typeof regexp != "object") {
-		return this.lastIndexOf(regexp, position);
+String.prototype.lastSearchOf = function (regexp, position = Number.POSITIVE_INFINITY) {
+	let srcReg = regexp;
+	if (regexp instanceof RegExp) {
+		regexp = new RegExp(`[\\s\\S]*(?=(${regexp.source}))`, regexp.flags.replace(/g/g, ''));
 	} else {
-		regexp = new RegExp(regexp.source, regexp.flags + 'g');
-	}
-
-	if (position === undefined) {
-		position = Number.POSITIVE_INFINITY;
+		return this.lastIndexOf(regexp, position);
 	}
 
 	let thisStr = this;
@@ -96,12 +91,34 @@ String.prototype.lastSearchOf = function (regexp, position) {
 		thisStr = thisStr.slice(0, position + 1);
 	}
 
-	let posRes = -1, matchRes;
-	while ((matchRes = regexp.exec(thisStr)) != null) {
-		posRes = matchRes.index;
+	if (!srcReg.test(thisStr)) {
+		return -1;
 	}
 
-	return posRes;
+	return thisStr.match(regexp)[0].length;
+};
+
+/**
+ * 填充字符串。
+ * @param {string} char 正则表达式。若为字符串则等同于 String.lastIndexOf ，在该方法下贪婪模式不生效。
+ * @param {number?} st 起始位置。若不指定则从字符串开头开始。
+ * @param {number?} en 结束位置。若不指定则从字符串末尾结束。
+ * @returns {string} 填充结果。
+ */
+String.prototype.fill = function (char, st = 0, en = this.length) {
+	if (st < 0) {
+		st = 0;
+	} else if (st >= this.length) {
+		return this;
+	}
+
+	if (en < 0) {
+		return this;
+	} else if (en >= this.length) {
+		en = this.length;
+	}
+
+	return this.split("").fill(char, st, en).join("");
 };
 
 // fs.writeFileSync("res.txt", "");
@@ -113,6 +130,13 @@ const Logger = (function () {
 	function Logger(options) {
 		options = options || {};
 		this.mergeOptions(this._options, options);
+		this._data.progress.layers[-1] = {
+			index: -1,
+			now: 0,
+			max: 1,
+			tempSize: 100,
+			tempProg: 0
+		};
 		console.clear();
 	}
 
@@ -146,7 +170,8 @@ const Logger = (function () {
 			determine: false,
 			finished: false,
 			max: 100,
-			now: 0
+			now: 0,
+			layers: []
 		}
 	};
 
@@ -172,10 +197,10 @@ const Logger = (function () {
 	};
 	Logger.prototype.updateConsole = function (forceOutput, stayInline) {
 		// 检查更新是否过于频繁
-		if (!forceOutput && new Date().getTime() - this._data.log.lastTime < this._options.progress.frequency) {
+		if (!forceOutput && Date.now() - this._data.log.lastTime < this._options.progress.frequency) {
 			return;
 		} else {
-			this._data.log.lastTime = new Date().getTime();
+			this._data.log.lastTime = Date.now();
 		}
 
 		// 日志进度
@@ -270,6 +295,32 @@ const Logger = (function () {
 		this._data.progress.enabled = false;
 		this.updateConsole(true, logChanged);
 	};
+
+	Logger.prototype.addLayer = function (max) {
+		let nowIndex = this._data.progress.layers.length;
+		let lastLayer = this._data.progress.layers[nowIndex - 1];
+		this._data.progress.layers.push({
+			index: nowIndex,
+			now: 0,
+			max,
+			tempSize: lastLayer.tempSize / lastLayer.max,
+			tempProg: lastLayer.tempProg
+		});
+	};
+	Logger.prototype.setLayer = function (now, max) {
+		let lastLayer = this._data.progress.layers.top(-1);
+		let nowLayer = this._data.progress.layers.top();
+		if (now !== undefined) {
+			nowLayer.now = now;
+		}
+		if (max !== undefined) {
+			nowLayer.max = max;
+		}
+		nowLayer.tempProg = lastLayer.tempProg + nowLayer.tempSize * nowLayer.now / nowLayer.max;
+	};
+	Logger.prototype.removeLayer = function () {
+		this._data.progress.layers.pop();
+	};
 	return Logger;
 })();
 function pause(text) {
@@ -278,7 +329,7 @@ function pause(text) {
 	}
 	// process.stdin.setRawMode已被废弃，某些版本只能使用回车键来解除暂停
 	console.warn(`${text !== undefined ? text + "\n" : ""}[请按${process.stdin.setRawMode ? '任意' : '回车'}键继续]`);
-	let stopTime = new Date().getTime();
+	let stopTime = Date.now();
 	process.stdin.setRawMode && process.stdin.setRawMode(true);
 	try {
 		fs.readSync(0, Buffer.alloc(1), 0, 1, null);
@@ -295,7 +346,7 @@ function pause(text) {
 		}
 	}
 	process.stdin.setRawMode && process.stdin.setRawMode(false);
-	PAUSE_TIME += new Date().getTime() - stopTime;
+	PAUSE_TIME += Date.now() - stopTime;
 }
 /**
  * 代码分析工具
@@ -501,36 +552,50 @@ function splitStatements(jsStr, statementType) {
 				let partJsStr = jsStr.slice(startPos, endPos + 1),
 					transPartJsStr = transLayerRes.slice(startPos, endPos + 1);
 				if (statementType === "SWITCH_CASE") {
-					if (/^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~ ]|(default:))/.test(transPartJsStr.slice(0, 8))) {
+					if (/^(case[!"'(+\-.\[{~ ]|default:)/.test(transPartJsStr.slice(0, 8))) {
 						// switch...case
-						endPos = transPartJsStr.indexOf(":");
+						endPos = (() => {
+							let reg = /[?:]/g, res, cnt = 0;
+							while (res = reg.exec(transPartJsStr)) {
+								res[0] === "?" ? cnt++ : cnt--;
+								if (cnt === -1) {
+									return res.index;
+								}
+							}
+						})();
 						splitJsArr.push(partJsStr.slice(0, endPos + 1));
 						startPos += endPos + 1;
+						// case后跟{则一定是代码块
+						if (transPartJsStr[startPos] === "{") {
+							endPos = getQuoteEndPos(partJsStr, startPos);
+							splitJsArr.push(partJsStr.slice(startPos, endPos + 1));
+							startPos = endPos + 1;
+						}
 					} else if ((() => {
 						let matchRes =
-							transLayerRes.slice(startPos).match(/^if\(Q+\){?.*?(};|;|})(else if\(Q+\){?.*?(};|;|}))*(else{?.*?(};|;|}))?/) || // if...else
-							transPartJsStr.match(/^(async )?function [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
-							transPartJsStr.match(/^(for|while)\(Q+\){?.*?(};|;|})/) || // for / while（花括号可省略，需判断）
-							transPartJsStr.match(/^do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
-							transPartJsStr.match(/^try{Q*}catch\(Q+\){Q*};?/) || // try...catch（两个花括号都不能省，所以无需判断）
-							transPartJsStr.match(/^switch\(Q+\){Q*};?/); // switch（两个花括号都不能省，所以无需判断）
+							transLayerRes.slice(startPos).match(/^(yield )?(await )?if\(Q+\){?.*?(};|;|})(else if\(Q+\){?.*?(};|;|}))*(else{?.*?(};|;|}))?/) || // if...else
+							transPartJsStr.match(/^(yield )?(await )?(async )?function\*? [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
+							transPartJsStr.match(/^(yield )?(await )?(for|while|with)\(Q+\){?.*?(};|;|})/) || // for / while / with（花括号可省略，需判断）
+							transPartJsStr.match(/^(yield )?(await )?do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
+							transPartJsStr.match(/^(yield )?(await )?try{Q*}catch\(Q+\){Q*};?/) || // try...catch（两个花括号都不能省，所以无需判断）
+							transPartJsStr.match(/^(yield )?(await )?switch\(Q+\){Q*};?/); // switch（两个花括号都不能省，所以无需判断）
 						return matchRes && (endPos = startPos + matchRes[0].length);
 					})()) {
 						splitJsArr.push(jsStr.slice(startPos, endPos));
 						startPos = endPos;
 					} else {
 						// 其它
-						splitJsArr.push(jsStr.slice(startPos, endPos + 1));
+						splitJsArr.push(...splitStatements(jsStr.slice(startPos, endPos + 1)));
 						startPos = endPos + 1;
 					}
 				} else if ((() => {
 					let matchRes =
-						transLayerRes.slice(startPos).match(/^if\(Q+\){?.*?(};|;|})(else if\(Q+\){?.*?(};|;|}))*(else{?.*?(};|;|}))?/) || // if...else
-						transPartJsStr.match(/^(async )?function [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
-						transPartJsStr.match(/^(for|while)\(Q+\){?.*?(};|;|})/) || // for / while（花括号可省略，需判断）
-						transPartJsStr.match(/^do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
-						transPartJsStr.match(/^try{Q*}catch\(Q+\){Q*};?/) || // try...catch（两个花括号都不能省，所以无需判断）
-						transPartJsStr.match(/^switch\(Q+\){Q*};?/); // switch（两个花括号都不能省，所以无需判断）
+						transLayerRes.slice(startPos).match(/^(yiled )?(await )?if\(Q+\){?.*?(};|;|})(else if\(Q+\){?.*?(};|;|}))*(else{?.*?(};|;|}))?/) || // if...else
+						transPartJsStr.match(/^(yiled )?(await )?(async )?function\* [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
+						transPartJsStr.match(/^(yiled )?(await )?(for|while|with)\(Q+\){?.*?(};|;|})/) || // for / while / with（花括号可省略，需判断）
+						transPartJsStr.match(/^(yiled )?(await )?do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
+						transPartJsStr.match(/^(yiled )?(await )?try{Q*}catch\(Q+\){Q*};?/) || // try...catch（两个花括号都不能省，所以无需判断）
+						transPartJsStr.match(/^(yiled )?(await )?switch\(Q+\){Q*};?/); // switch（两个花括号都不能省，所以无需判断）
 					return matchRes && (endPos = startPos + matchRes[0].length);
 				})()) {
 					splitJsArr.push(jsStr.slice(startPos, endPos));
@@ -540,9 +605,9 @@ function splitStatements(jsStr, statementType) {
 					splitJsArr.push(jsStr.slice(startPos, endPos + 1));
 					startPos = endPos + 1;
 				}
-			} while ((endPos = transLayerRes.indexOf(";", startPos)) !== -1);
+			} while (statementType === "SWITCH_CASE" ? (endPos = transLayerRes.searchOf(/[;:}](case[!"'(+\-.\[{~ ]|default:)/, startPos)) !== -1 : (endPos = transLayerRes.indexOf(";", startPos)) !== -1);
 			if (startPos < jsStr.length) {
-				splitJsArr.push(jsStr.slice(startPos));
+				splitJsArr.push(...splitStatements(jsStr.slice(startPos)));
 			}
 			break;
 		}
@@ -613,7 +678,7 @@ try {
 }
 
 // 开始计时
-let START_TIMESTAMP = new Date().getTime(), PAUSE_TIME = 0;
+let START_TIMESTAMP = Date.now(), PAUSE_TIME = 0;
 
 // 初始化日志工具并确认文件路径
 let logger = new Logger(config["logger"]);
@@ -682,7 +747,7 @@ js = compressionCode(js);
 fs.writeFileSync("DecryptResult0.js", js);
 
 logger.logWithoutDetermine("解除全局加密");
-const globalDecryptorInfo = {
+const GLOBAL_DECRYPTOR_INFO = {
 	signInfo: {
 		name: null,
 		// _0xod / _0x / iIl / oO0 / abc
@@ -705,6 +770,55 @@ const globalDecryptorInfo = {
 		raw: null
 	}
 };
+const STATEMENTS_TYPE_SCHEMAS = {
+	signInfo: {
+		"Self": /^var (_?[0-9a-zA-Z$ｉＯ]+?='S+?',(_?[0-9a-zA-Z$ｉＯ]+?_=\['S+?'],)?)?_?[0-9a-zA-Z$]+=\[_?[0-9a-zA-Z$ｉＯ']+?(,'S+?')*?];?/
+	},
+	preprocessFunction: {
+		// _0x102809='po';var _0x111dc8='shift',_0x47c13d='push'
+		"PoShiftPushString": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})='po';var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})='shift',(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})='push'/,
+		// while(--_0x1f4621){
+		"DecreasingLoop": /while\(--(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\)\{/,
+		// _0x362d54=_0x5845c1,_0x2576f4=_0x2d8f05[_0x4fbc7a+'p']();
+		"AddPFunction": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3}),(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\[(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\+'p']\(\);/,
+		// ['replace'](/[zUrTestTestZTest=]/g,'')
+		"ReplaceBase64RegExp": /\['replace']\(\/\[[0-9a-zA-Z]*?=]\/g,''\)/,
+		// c['push'](c['shift']());
+		"PushAndShift": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['push']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['shift']\(\)\)/,
+		// return _0x43c762(++_0x3c2786,_0x2db158)>>_0x3c2786^_0x2db158;
+		"ReturnWith++And>>And^": /return (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\(\+\+(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3}),(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\)>>(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\^(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})/,
+		// var _0xeaaebc={'data':{'key':'cookie','value':'timeout'}
+		"CookieTimeoutDataObject": /var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=\{'data':\{'key':'cookie','value':'timeout'}/,
+		// new RegExp\(\'\(\?\:\^\|\;\\x20\)\'\+_0x49a403\[\'replace\'\]\(\/\(\[\.\$\?\*\|\{\}\(\)\[\]\\\/\+\^\]\)\/g\,\'\$1\'\)\+\'\=\(\[\^\;\]\*\)\'\)
+		"SignReplaceRegExp": /new RegExp\('\(\?:\^\|;\\x20\)'\+(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['replace']\(\/\(\[\.\$\?\*\|\{}\(\)\[]\\\/\+\^]\)\/g,'\$1'\)\+'=\(\[\^;]\*\)'\)/,
+		// new RegExp('\x5cw+\x20*\x5c(\x5c)\x20*{\x5cw+\x20*[\x27|\x22].+[\x27|\x22];?\x20*}');
+		"EscapedRegExp": /new RegExp\('\\x5cw+\\x20*\\x5c\(\\x5c\)\\x20\*\{\\x5cw\+\\x20\*\[\\x27|\\x22]\.\+\[\\x27|\\x22];\?\\x20*}'\);/
+	},
+	decryptor: {
+		/* 有预处理函数 */
+		// _0x542044=~~'0x'['concat'](_0x542044
+		"DoubleWaveConcat": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=~~'0x'\['concat']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})/,
+		// Function('return\x20(function()\x20'+'{}.constructor(\x22return\x20this\x22)(\x20)'+');')
+		"FunctionConstructorString": /Function\('return\\x20\(function\(\)\\x20'\+'\{}\.constructor\(\\x22return\\x20this\\x22\)\(\\x20\)'\+'\);'\)/,
+		// var _0x3ef5fb=typeof window!=='undefined'?window:typeof process==='object'&&typeof require==='function'&&typeof global==='object'?global:this;
+		"WhatIsThis": /var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=typeof window!=='undefined'\?window:typeof process==='object'&&typeof require==='function'&&typeof global==='object'\?global:this;/,
+		// var _0x1d2c53='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+		"CharSetString": /var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\+\/=';/,
+		// '%'+('00'+_0x1f82f7['charCodeAt']
+		"ZeroPlusCharCodeAt": /'%'\+\('00'\+(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['charCodeAt']/,
+		// _0x53656e['charCodeAt'](_0x578a24%_0x53656e['length']))%0x100;
+		"CharCodeAtLength": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['charCodeAt']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})%(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['length']\)\)%0x100;/,
+		// +=String['fromCharCode'](
+		"PlusStringFromCharCode": /\+=String\['fromCharCode']\(/,
+		/* 无预处理函数 */
+		// function _0x9549(_0x52aa18,_0x1a09ad){_0x52aa18=~~'0x'['concat'](_0x52aa18['slice'](0x0));var _0x4fe032=_0x34a7[_0x52aa18];return _0x4fe032;};
+		"WithoutPreprocess": /function (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3}),(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\)\{(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=~~'0x'\['concat']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['slice']\(0x0\)\);var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\[(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})];return (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3});};/
+	},
+	verifyFunction: {
+		// for(_0x36eaeb=_0x39941e['shift'](_0x422e9c>>0x2);_0x36eaeb&&_0x36eaeb!==(_0x39941e['pop'](_0x422e9c>>0x3)+'')['replace'](/[ChUlbeWOEtLSnTtk=]/g,'');_0x422e9c++)
+		"Self": /for\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['shift']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})>>0x2\);(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})&&(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})!==\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['pop']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})>>0x3\)\+''\)\['replace']\(\/\[[a-zA-Z]+=?]\/g,''\);(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\+\+\)/
+	}
+};
 function getStatementsType(jsArr) {
 	return jsArr.map(function (jsStr) {
 		let transRes = transStr(jsStr);
@@ -713,43 +827,44 @@ function getStatementsType(jsArr) {
 		 * 签名信息
 		 * @namespace signInfo
 		 * @description 用于存放签名以及处理前的解密数据。
-		 * 签名命名规则 _?[0-9a-zA-Z$ｉＯ]+?
-		 * 变量命名规则 _?[0-9a-zA-Z$]+?
-		 * 字符串规则 'S+?'
+		 * 签名命名规则 _?[0-9a-zA-Z$ｉＯ]+
+		 * 变量命名规则 _?[0-9a-zA-Z$]+
+		 * 字符串规则 'S+'
 		 */
-		if (globalDecryptorInfo.signInfo.raw == null) {
-			if (/^var (_?[0-9a-zA-Z$ｉＯ]+?='S+?',(_?[0-9a-zA-Z$ｉＯ]+?_=\['S+?'],)?)?_?[0-9a-zA-Z$]+?=\[_?[0-9a-zA-Z$ｉＯ']+?(,'S+?')*?];?/.test(transRes)) {
-				globalDecryptorInfo.signInfo.name = jsStr.slice(4, transRes.indexOf("=", 4));
-				(function (signName) {
+		if (GLOBAL_DECRYPTOR_INFO.signInfo.raw == null) {
+			let schemas = STATEMENTS_TYPE_SCHEMAS.signInfo;
+			if (schemas["Self"].test(transRes)) {
+				GLOBAL_DECRYPTOR_INFO.signInfo.name = jsStr.slice(4, transRes.indexOf("=", 4));
+				(signName => {
 					if (/^_0xod[0-9a-zA-Z]$/.test(signName)) {
-						globalDecryptorInfo.signInfo.confuseType = "_0xod";
-						globalDecryptorInfo.signInfo.nameRegExp = `_0x[0-9a-f]+`;
+						GLOBAL_DECRYPTOR_INFO.signInfo.confuseType = "_0xod";
+						GLOBAL_DECRYPTOR_INFO.signInfo.nameRegExp = `_0x[0-9a-f]+`;
 					} else if (/^_0x[0-9a-f]{4}$/.test(signName)) {
-						globalDecryptorInfo.signInfo.confuseType = "_0x";
-						globalDecryptorInfo.signInfo.nameRegExp = `_0x[0-9a-f]+`;
+						GLOBAL_DECRYPTOR_INFO.signInfo.confuseType = "_0x";
+						GLOBAL_DECRYPTOR_INFO.signInfo.nameRegExp = `_0x[0-9a-f]+`;
 					} else if (/^[iｉl]+$/.test(signName)) {
-						globalDecryptorInfo.signInfo.confuseType = "iIl";
-						globalDecryptorInfo.signInfo.nameRegExp = `[iIl1]+`;
+						GLOBAL_DECRYPTOR_INFO.signInfo.confuseType = "iIl";
+						GLOBAL_DECRYPTOR_INFO.signInfo.nameRegExp = `[iIl1]+`;
 					} else if (/^[OＯ0$]+$/.test(signName)) {
-						globalDecryptorInfo.signInfo.confuseType = "oO0";
-						globalDecryptorInfo.signInfo.nameRegExp = `[O0Q$]+`;
+						GLOBAL_DECRYPTOR_INFO.signInfo.confuseType = "oO0";
+						GLOBAL_DECRYPTOR_INFO.signInfo.nameRegExp = `[O0Q$]+`;
 					} else if (/^[a-z]+$/.test(signName)) {
-						globalDecryptorInfo.signInfo.confuseType = "abc";
-						globalDecryptorInfo.signInfo.nameRegExp = `[a-z]+`;
+						GLOBAL_DECRYPTOR_INFO.signInfo.confuseType = "abc";
+						GLOBAL_DECRYPTOR_INFO.signInfo.nameRegExp = `[a-z]+`;
 					} else {
 						throw Error(`Error: 包含未知的混淆模式“${signName}”。`);
 					}
-				})(globalDecryptorInfo.signInfo.name);
-				globalDecryptorInfo.signInfo.hasSignString = /^var _?[0-9a-zA-Z$ｉＯ]+?='S+?',/.test(transRes);
-				globalDecryptorInfo.signInfo.hasMemberArray = /_?[0-9a-zA-Z$ｉＯ]+?_=\['S+?'],/.test(transRes);
-				globalDecryptorInfo.signInfo.raw = jsStr;
+				})(GLOBAL_DECRYPTOR_INFO.signInfo.name);
+				GLOBAL_DECRYPTOR_INFO.signInfo.hasSignString = /^var _?[0-9a-zA-Z$ｉＯ]+='S+?',/.test(transRes);
+				GLOBAL_DECRYPTOR_INFO.signInfo.hasMemberArray = /_?[0-9a-zA-Z$ｉＯ]+_=\['S+?'],/.test(transRes);
+				GLOBAL_DECRYPTOR_INFO.signInfo.raw = jsStr;
 				return {
 					type: "SIGN_INFO",
-					content: globalDecryptorInfo.signInfo
+					content: GLOBAL_DECRYPTOR_INFO.signInfo
 				};
 			}
 		} else {
-			if (new RegExp(`^${globalDecryptorInfo.signInfo.name}='S+';?$`).test(transRes)) {
+			if (new RegExp(`^${GLOBAL_DECRYPTOR_INFO.signInfo.name.replace(/\$/g, "\\$")}='S*';?$`).test(transRes)) {
 				return {
 					type: "SIGN_REITERATE",
 					content: {
@@ -763,44 +878,25 @@ function getStatementsType(jsArr) {
 		 * 预处理函数
 		 * @namespace globalDecryptorInfo.preprocessFunction
 		 * @description 将签名信息预处理为可用的解密数据。
-		 * 变量命名规则 _?[0-9a-zA-Z$]+?
-		 * 字符串规则 'S+?'
+		 * 变量命名规则 _?[0-9a-zA-Z$]+
+		 * 字符串规则 'S+'
 		 * */
-		if (globalDecryptorInfo.signInfo.raw != null && globalDecryptorInfo.preprocessFunction.raw == null) {
-			let schemas = {
-				// _0x102809='po';var _0x111dc8='shift',_0x47c13d='push'
-				"PoShiftPushString": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})='po';var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})='shift',(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})='push'/.test(jsStr),
-				// while(--_0x1f4621){
-				"DecreasingLoop": /while\(--(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\)\{/.test(jsStr),
-				// _0x362d54=_0x5845c1,_0x2576f4=_0x2d8f05[_0x4fbc7a+'p']();
-				"AddPFunction": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3}),(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\[(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\+'p']\(\);/.test(jsStr),
-				// ['replace'](/[zUrTestTestZTest=]/g,'')
-				"ReplaceBase64RegExp": /\['replace']\(\/\[[0-9a-zA-Z]*?=]\/g,''\)/.test(jsStr),
-				// c['push'](c['shift']());
-				"PushAndShift": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['push']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['shift']\(\)\)/.test(jsStr),
-				// return _0x43c762(++_0x3c2786,_0x2db158)>>_0x3c2786^_0x2db158;
-				"ReturnWith++And>>And^": /return (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\(\+\+(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3}),(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\)>>(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\^(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})/.test(jsStr),
-				// var _0xeaaebc={'data':{'key':'cookie','value':'timeout'}
-				"CookieTimeoutDataObject": /var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=\{'data':\{'key':'cookie','value':'timeout'}/.test(jsStr),
-				// new RegExp\(\'\(\?\:\^\|\;\\x20\)\'\+_0x49a403\[\'replace\'\]\(\/\(\[\.\$\?\*\|\{\}\(\)\[\]\\\/\+\^\]\)\/g\,\'\$1\'\)\+\'\=\(\[\^\;\]\*\)\'\)
-				"SignReplaceRegExp": /new RegExp\('\(\?:\^\|;\\x20\)'\+(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['replace']\(\/\(\[\.\$\?\*\|\{}\(\)\[]\\\/\+\^]\)\/g,'\$1'\)\+'=\(\[\^;]\*\)'\)/.test(jsStr),
-				// new RegExp('\x5cw+\x20*\x5c(\x5c)\x20*{\x5cw+\x20*[\x27|\x22].+[\x27|\x22];?\x20*}');
-				"EscapedRegExp": /new RegExp\('\\x5cw+\\x20*\\x5c\(\\x5c\)\\x20\*\{\\x5cw\+\\x20\*\[\\x27|\\x22]\.\+\[\\x27|\\x22];\?\\x20*}'\);/.test(jsStr)
-			};
+		if (GLOBAL_DECRYPTOR_INFO.signInfo.raw != null && GLOBAL_DECRYPTOR_INFO.preprocessFunction.raw == null) {
+			let schemas = STATEMENTS_TYPE_SCHEMAS.preprocessFunction;
 			if (
-				schemas["PoShiftPushString"] +
-				schemas["DecreasingLoop"] +
-				schemas["ReplaceBase64RegExp"] +
-				schemas["PushAndShift"] +
-				schemas["ReturnWith++And>>And^"] +
-				schemas["CookieTimeoutDataObject"] +
-				schemas["SignReplaceRegExp"] +
-				schemas["EscapedRegExp"] >= 3
+				schemas["PoShiftPushString"].test(jsStr) +
+				schemas["DecreasingLoop"].test(jsStr) +
+				schemas["ReplaceBase64RegExp"].test(jsStr) +
+				schemas["PushAndShift"].test(jsStr) +
+				schemas["ReturnWith++And>>And^"].test(jsStr) +
+				schemas["CookieTimeoutDataObject"].test(jsStr) +
+				schemas["SignReplaceRegExp"].test(jsStr) +
+				schemas["EscapedRegExp"].test(jsStr) >= 3
 			) {
-				globalDecryptorInfo.preprocessFunction.raw = jsStr;
+				GLOBAL_DECRYPTOR_INFO.preprocessFunction.raw = jsStr;
 				return {
 					type: "PREPROCESS_FUNCTION",
-					content: globalDecryptorInfo.preprocessFunction
+					content: GLOBAL_DECRYPTOR_INFO.preprocessFunction
 				};
 			}
 		}
@@ -809,64 +905,47 @@ function getStatementsType(jsArr) {
 		 * 解密函数
 		 * @namespace globalDecryptorInfo.decryptor
 		 * @description 使用解密数据完成字符串解密。
-		 * 变量命名规则 _?[0-9a-zA-Z$]+?
-		 * 字符串规则 'S+?'
+		 * 变量命名规则 _?[0-9a-zA-Z$]+
+		 * 字符串规则 'S+'
 		 * */
-		if (globalDecryptorInfo.signInfo.raw != null && globalDecryptorInfo.decryptor.raw == null) {
+		if (GLOBAL_DECRYPTOR_INFO.signInfo.raw != null && GLOBAL_DECRYPTOR_INFO.decryptor.raw == null) {
 			let isDecryptor = false;
-			if (globalDecryptorInfo.preprocessFunction.raw != null) {
+			let schemas = STATEMENTS_TYPE_SCHEMAS.decryptor;
+			if (GLOBAL_DECRYPTOR_INFO.preprocessFunction.raw != null) {
 				// 有预处理函数
-				let schemas = {
-					// _0x542044=~~'0x'['concat'](_0x542044
-					"DoubleWaveConcat": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=~~'0x'\['concat']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})/.test(jsStr),
-					// Function('return\x20(function()\x20'+'{}.constructor(\x22return\x20this\x22)(\x20)'+');')
-					"FunctionConstructorString": /Function\('return\\x20\(function\(\)\\x20'\+'\{}\.constructor\(\\x22return\\x20this\\x22\)\(\\x20\)'\+'\);'\)/.test(jsStr),
-					// var _0x3ef5fb=typeof window!=='undefined'?window:typeof process==='object'&&typeof require==='function'&&typeof global==='object'?global:this;
-					"WhatIsThis": /var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=typeof window!=='undefined'\?window:typeof process==='object'&&typeof require==='function'&&typeof global==='object'\?global:this;/.test(jsStr),
-					// var _0x1d2c53='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-					"CharSetString": /var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\+\/=';/.test(jsStr),
-					// '%'+('00'+_0x1f82f7['charCodeAt']
-					"ZeroPlusCharCodeAt": /'%'\+\('00'\+(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['charCodeAt']/.test(jsStr),
-					// _0x53656e['charCodeAt'](_0x578a24%_0x53656e['length']))%0x100;
-					"CharCodeAtLength": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['charCodeAt']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})%(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['length']\)\)%0x100;/.test(jsStr),
-					// +=String['fromCharCode'](
-					"PlusStringFromCharCode": /\+=String\['fromCharCode']\(/.test(jsStr)
-				};
-				// fs.appendFileSync("test.txt", JSON.stringify(schemas) + "\n");
 				if (
-					schemas["DoubleWaveConcat"] +
-					schemas["FunctionConstructorString"] +
-					schemas["WhatIsThis"] +
-					schemas["CharSetString"] +
-					schemas["ZeroPlusCharCodeAt"] +
-					schemas["CharCodeAtLength"] +
-					schemas["PlusStringFromCharCode"] >= 4
+					schemas["DoubleWaveConcat"].test(jsStr) +
+					schemas["FunctionConstructorString"].test(jsStr) +
+					schemas["WhatIsThis"].test(jsStr) +
+					schemas["CharSetString"].test(jsStr) +
+					schemas["ZeroPlusCharCodeAt"].test(jsStr) +
+					schemas["CharCodeAtLength"].test(jsStr) +
+					schemas["PlusStringFromCharCode"].test(jsStr) >= 4
 				) {
 					isDecryptor = true;
 				}
 			} else {
 				// 无预处理函数
-				// function _0x9549(_0x52aa18,_0x1a09ad){_0x52aa18=~~'0x'['concat'](_0x52aa18['slice'](0x0));var _0x4fe032=_0x34a7[_0x52aa18];return _0x4fe032;};
-				if (/function (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3}),(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\)\{(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=~~'0x'\['concat']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['slice']\(0x0\)\);var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\[(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})];return (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3});};/.test(jsStr)) {
+				if (schemas["WithoutPreprocess"].test(jsStr)) {
 					isDecryptor = true;
 				}
 			}
 			if (isDecryptor) {
 				if (jsStr.startsWith("function ")) {
-					globalDecryptorInfo.decryptor.type = "function";
-					globalDecryptorInfo.decryptor.name = jsStr.slice(9, transRes.indexOf("("));
-					globalDecryptorInfo.decryptor.raw = jsStr;
+					GLOBAL_DECRYPTOR_INFO.decryptor.type = "function";
+					GLOBAL_DECRYPTOR_INFO.decryptor.name = jsStr.slice(9, transRes.indexOf("("));
+					GLOBAL_DECRYPTOR_INFO.decryptor.raw = jsStr;
 					return {
 						type: "DECRYPTOR",
-						content: globalDecryptorInfo.decryptor
+						content: GLOBAL_DECRYPTOR_INFO.decryptor
 					};
 				} else if (jsStr.startsWith("var ")) {
-					globalDecryptorInfo.decryptor.type = "var";
-					globalDecryptorInfo.decryptor.name = jsStr.slice(4, transRes.indexOf("="));
-					globalDecryptorInfo.decryptor.raw = jsStr;
+					GLOBAL_DECRYPTOR_INFO.decryptor.type = "var";
+					GLOBAL_DECRYPTOR_INFO.decryptor.name = jsStr.slice(4, transRes.indexOf("="));
+					GLOBAL_DECRYPTOR_INFO.decryptor.raw = jsStr;
 					return {
 						type: "DECRYPTOR",
-						content: globalDecryptorInfo.decryptor
+						content: GLOBAL_DECRYPTOR_INFO.decryptor
 					};
 				}
 			}
@@ -876,16 +955,16 @@ function getStatementsType(jsArr) {
 		 * 验证函数
 		 * @namespace globalDecryptorInfo.verifyFunction
 		 * @description 验证解密数据是否被修改，并去掉头尾多余内容。
-		 * 变量命名规则 _?[0-9a-zA-Z$]+?
-		 * 字符串规则 'S+?'
+		 * 变量命名规则 _?[0-9a-zA-Z$]+
+		 * 字符串规则 'S+'
 		 * */
-		if (globalDecryptorInfo.signInfo.raw != null && globalDecryptorInfo.preprocessFunction.raw == null && globalDecryptorInfo.decryptor.raw != null) {
-			// for(_0x36eaeb=_0x39941e['shift'](_0x422e9c>>0x2);_0x36eaeb&&_0x36eaeb!==(_0x39941e['pop'](_0x422e9c>>0x3)+'')['replace'](/[ChUlbeWOEtLSnTtk=]/g,'');_0x422e9c++)
-			if (/for\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['shift']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})>>0x2\);(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})&&(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})!==\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['pop']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})>>0x3\)\+''\)\['replace']\(\/\[[a-zA-Z]+=?]\/g,''\);(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\+\+\)/.test(jsStr)) {
-				globalDecryptorInfo.verifyFunction.raw = jsStr;
+		if (GLOBAL_DECRYPTOR_INFO.signInfo.raw != null && GLOBAL_DECRYPTOR_INFO.preprocessFunction.raw == null && GLOBAL_DECRYPTOR_INFO.decryptor.raw != null) {
+			let schemas = STATEMENTS_TYPE_SCHEMAS.verifyFunction;
+			if (schemas["Self"].test(jsStr)) {
+				GLOBAL_DECRYPTOR_INFO.verifyFunction.raw = jsStr;
 				return {
 					type: "VERIFY_FUNCTION",
-					content: globalDecryptorInfo.verifyFunction
+					content: GLOBAL_DECRYPTOR_INFO.verifyFunction
 				};
 			}
 		}
@@ -930,17 +1009,17 @@ function decryptGlobalJs(js) {
 	}
 	let jsArr = splitStatements(js);
 	let statementsTypeArr = getStatementsType(jsArr);
-	if (globalDecryptorInfo.decryptor.raw === null) {
+	if (GLOBAL_DECRYPTOR_INFO.decryptor.raw === null) {
 		pause("【警告】解密函数识别失败，可在 GitHub[https://github.com/NXY666/Jsjiemi] 上提交 issue 以寻找原因。");
 		return jsArr;
 	} else {
-		if (globalDecryptorInfo.preprocessFunction.raw === null && globalDecryptorInfo.verifyFunction.raw === null) {
+		if (GLOBAL_DECRYPTOR_INFO.preprocessFunction.raw === null && GLOBAL_DECRYPTOR_INFO.verifyFunction.raw === null) {
 			pause("【警告】已发现解密函数，但未发现其对应的预处理函数或验证函数，可能无法正常运行。可在 GitHub[https://github.com/NXY666/Jsjiemi] 上提交 issue 以寻找原因。");
 		}
-		virtualGlobalEval(globalDecryptorInfo.signInfo.raw);
-		virtualGlobalEval(globalDecryptorInfo.preprocessFunction.raw);
-		virtualGlobalEval(globalDecryptorInfo.decryptor.raw);
-		virtualGlobalEval(globalDecryptorInfo.verifyFunction.raw);
+		virtualGlobalEval(GLOBAL_DECRYPTOR_INFO.signInfo.raw);
+		virtualGlobalEval(GLOBAL_DECRYPTOR_INFO.preprocessFunction.raw);
+		virtualGlobalEval(GLOBAL_DECRYPTOR_INFO.decryptor.raw);
+		virtualGlobalEval(GLOBAL_DECRYPTOR_INFO.verifyFunction.raw);
 	}
 	return jsArr.filter(function (jsStr, index) {
 		return statementsTypeArr[index].type === "COMMON";
@@ -949,7 +1028,7 @@ function decryptGlobalJs(js) {
 		transStrRes = transStr(funcJs);
 
 		let decryptorPos = Number.POSITIVE_INFINITY;
-		while ((decryptorPos === Number.POSITIVE_INFINITY || decryptorPos - 1 >= 0) && (decryptorPos = transStrRes.lastIndexOf(`${globalDecryptorInfo.decryptor.name}('`, decryptorPos - 1)) !== -1) {
+		while ((decryptorPos === Number.POSITIVE_INFINITY || decryptorPos - 1 >= 0) && (decryptorPos = transStrRes.lastIndexOf(`${GLOBAL_DECRYPTOR_INFO.decryptor.name}('`, decryptorPos - 1)) !== -1) {
 			logger.weakUpdate();
 			let endPos = transStrRes.indexOf(")", decryptorPos);
 			funcJs = funcJs.replaceWithStr(decryptorPos, endPos + 1, escapeEvalStr(virtualEval(funcJs.slice(decryptorPos, endPos + 1))));
@@ -1068,10 +1147,27 @@ function findAndDecryptCodeBlock(jsArr, isShowProgress) {
 		return jsStr;
 	});
 }
+const ANTI_FORMAT_SCHEMAS = {
+	// var Iii11l=function(_0x38a067){var _0x18a5dd=true;return function(_0x50a0cd,_0x2e85e1){var _0x311825='';var _0x370651=_0x18a5dd?function(){if(_0x311825===''&&_0x2e85e1){var _0x5599c3=_0x2e85e1['apply'](_0x50a0cd,arguments);_0x2e85e1=null;return _0x5599c3;}}:function(_0x38a067){};_0x18a5dd=false;var _0x38a067='';return _0x370651;};}();
+	"HandleFunction": /^var _?[0-9a-zA-Z$]+=function\(_0x[0-9a-f]+\)\{var _0x[0-9a-f]+=true;return function\(_0x[0-9a-f]+,_0x[0-9a-f]+\)\{var _0x[0-9a-f]+='\u202e?';var _0x[0-9a-f]+=_0x[0-9a-f]+\?function\(\)\{if\(_0x[0-9a-f]+==='\u202e?'&&_0x[0-9a-f]+\)\{var _0x[0-9a-f]+=_0x[0-9a-f]+\['apply']\(_0x[0-9a-f]+,arguments\);_0x[0-9a-f]+=null;return _0x[0-9a-f]+;}}:function\(_0x[0-9a-f]+\)\{};_0x[0-9a-f]+=false;var _0x[0-9a-f]+='\u202e?';return _0x[0-9a-f]+;};}\(\);$/,
+	// var lIllII=Iii11l(this,function(){var _0xb7103=function(){return'\x64\x65\x76';},_0x5099b6=function(){return'\x77\x69\x6e\x64\x6f\x77';};var _0x47d370=function(){var _0x2a2dae=new RegExp('\x5c\x77\x2b\x20\x2a\x5c\x28\x5c\x29\x20\x2a\x7b\x5c\x77\x2b\x20\x2a\x5b\x27\x7c\x22\x5d\x2e\x2b\x5b\x27\x7c\x22\x5d\x3b\x3f\x20\x2a\x7d');return!_0x2a2dae['\x74\x65\x73\x74'](_0xb7103['\x74\x6f\x53\x74\x72\x69\x6e\x67']());};var _0x31ac8b=function(){var _0x233c31=new RegExp('\x28\x5c\x5c\x5b\x78\x7c\x75\x5d\x28\x5c\x77\x29\x7b\x32\x2c\x34\x7d\x29\x2b');return _0x233c31['\x74\x65\x73\x74'](_0x5099b6['\x74\x6f\x53\x74\x72\x69\x6e\x67']());};var _0x45622f=function(_0x3369e4){var _0x249441=~-0x1>>0x1+0xff%0x0;if(_0x3369e4['\x69\x6e\x64\x65\x78\x4f\x66']('\x69'===_0x249441)){_0x297518(_0x3369e4);}};var _0x297518=function(_0x45378d){var _0x2c47cd=~-0x4>>0x1+0xff%0x0;if(_0x45378d['\x69\x6e\x64\x65\x78\x4f\x66']((true+'')[0x3])!==_0x2c47cd){_0x45622f(_0x45378d);}};if(!_0x47d370()){if(!_0x31ac8b()){_0x45622f('\x69\x6e\x64\u0435\x78\x4f\x66');}else{_0x45622f('\x69\x6e\x64\x65\x78\x4f\x66');}}else{_0x45622f('\x69\x6e\x64\u0435\x78\x4f\x66');}});
+	"DetectFunction": /^var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\(this,function\(\)\{var _0x[0-9a-f]+=function\(\)\{return'\\x64\\x65\\x76';},_0x[0-9a-f]+=function\(\)\{return'\\x77\\x69\\x6e\\x64\\x6f\\x77';};var _0x[0-9a-f]+=function\(\)\{var _0x[0-9a-f]+=new RegExp\('\\x5c\\x77\\x2b\\x20\\x2a\\x5c\\x28\\x5c\\x29\\x20\\x2a\\x7b\\x5c\\x77\\x2b\\x20\\x2a\\x5b\\x27\\x7c\\x22\\x5d\\x2e\\x2b\\x5b\\x27\\x7c\\x22\\x5d\\x3b\\x3f\\x20\\x2a\\x7d'\);return!_0x[0-9a-f]+\['\\x74\\x65\\x73\\x74']\(_0x[0-9a-f]+\['\\x74\\x6f\\x53\\x74\\x72\\x69\\x6e\\x67']\(\)\);};var _0x[0-9a-f]+=function\(\)\{var _0x[0-9a-f]+=new RegExp\('\\x28\\x5c\\x5c\\x5b\\x78\\x7c\\x75\\x5d\\x28\\x5c\\x77\\x29\\x7b\\x32\\x2c\\x34\\x7d\\x29\\x2b'\);return _0x[0-9a-f]+\['\\x74\\x65\\x73\\x74']\(_0x[0-9a-f]+\['\\x74\\x6f\\x53\\x74\\x72\\x69\\x6e\\x67']\(\)\);};var _0x[0-9a-f]+=function\(_0x[0-9a-f]+\)\{var _0x[0-9a-f]+=~-0x1>>0x1\+0xff%0x0;if\(_0x[0-9a-f]+\['\\x69\\x6e\\x64\\x65\\x78\\x4f\\x66']\('\\x69'===_0x[0-9a-f]+\)\)\{_0x[0-9a-f]+\(_0x[0-9a-f]+\);}};var _0x[0-9a-f]+=function\(_0x[0-9a-f]+\)\{var _0x[0-9a-f]+=~-0x4>>0x1\+0xff%0x0;if\(_0x[0-9a-f]+\['\\x69\\x6e\\x64\\x65\\x78\\x4f\\x66']\(\(true\+''\)\[0x3]\)!==_0x[0-9a-f]+\)\{_0x[0-9a-f]+\(_0x[0-9a-f]+\);}};if\(!_0x[0-9a-f]+\(\)\)\{if\(!_0x[0-9a-f]+\(\)\)\{_0x[0-9a-f]+\('\\x69\\x6e\\x64\\u0435\\x78\\x4f\\x66'\);}else\{_0x[0-9a-f]+\('\\x69\\x6e\\x64\\x65\\x78\\x4f\\x66'\);}}else\{_0x[0-9a-f]+\('\\x69\\x6e\\x64\\u0435\\x78\\x4f\\x66'\);}}\);$/,
+	// llIlII();
+	"FunctionRunner": /^_?[0-9a-zA-Z$]+\(\);$/
+};
 function decryptCodeBlockArr(jsArr, isShowProgress) {
 	if (isShowProgress) {
 		logger.logWithProgress("解除代码块加密", 0, jsArr.length);
 	}
+	// 检查是否有禁止格式化代码（不管选择什么命名格式，这里都会用十六进制命名）
+	if (
+		ANTI_FORMAT_SCHEMAS["HandleFunction"].test(jsArr[0]) &&
+		ANTI_FORMAT_SCHEMAS["DetectFunction"].test(jsArr[1]) &&
+		ANTI_FORMAT_SCHEMAS["FunctionRunner"].test(jsArr[2])
+	) {
+		jsArr = jsArr.slice(3);
+	}
+	// 获取加密对象名称（无则为false）
 	let decryptorObjName = getCodeBlockDecryptorName(jsArr[0]);
 	// 代码块解密
 	if (decryptorObjName) {
@@ -1134,7 +1230,7 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 jsStatementsArr = decryptCodeBlockArr(jsStatementsArr, true);
 fs.writeFileSync("DecryptResult2.js", jsStatementsArr.join("\n"));
 
-logger.logWithProgress("清理死代码（花指令）");
+logger.logWithoutProgress("清理死代码（花指令）");
 function simplifyIf(ifJsStr) {
 	let conditionStartPos = 2, conditionEndPos = getQuoteEndPos(ifJsStr, conditionStartPos);
 	let ifRes = eval(ifJsStr.slice(conditionStartPos, conditionEndPos + 1));
@@ -1257,6 +1353,47 @@ function clearDeadCodes(jsArr, isShowProgress) {
 jsStatementsArr = clearDeadCodes(jsStatementsArr, true);
 fs.writeFileSync("DecryptResult3.js", jsStatementsArr.join("\n"));
 
+logger.logWithoutDetermine("解除环境限制");
+function clearEnvironmentLimit(jsArr) {
+	let jsStr = jsArr.join("");
+	let transRes = transStr(jsStr);
+	// 禁止控制台输出
+	let preSearchRegexp = /(?:var _?[0-9a-zA-Z$]+=function\(_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=true;return function\(_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+='\u202e?';var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\?function\(\)\{if\(\(?_?[0-9a-zA-Z$]+==='\u202e?'\)?&&_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\['apply']\(_?[0-9a-zA-Z$]+,arguments\);_?[0-9a-zA-Z$]+=null;return _?[0-9a-zA-Z$]+;}}:function\(_?[0-9a-zA-Z$]+\)\{};_?[0-9a-zA-Z$]+=false;var _?[0-9a-zA-Z$]+='\u202e?';return _?[0-9a-zA-Z$]+;};}\(\);)?(?:\(function\(\)\{_?[0-9a-zA-Z$]+\(this,function\(\)\{var _?[0-9a-zA-Z$]+=new RegExp\('function \*\\\\\( \*\\\\\)'\);var _?[0-9a-zA-Z$]+=new RegExp\('\\\\\+\\\\\+ \*\(\?:\(\?:\[a-z0-9A-Z_]\)\{1,8}\|\(\?:\\\\b\|\\\\d\)\[a-z0-9_]\{1,8}\(\?:\\\\b\|\\\\d\)\)','(?:i|\\x69)'\);var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\('init'\);if\(!_?[0-9a-zA-Z$]+\['test']\(_?[0-9a-zA-Z$]+\+'chain'\)\|\|!_?[0-9a-zA-Z$]+\['test']\(_?[0-9a-zA-Z$]+\+'input'\)\)\{_?[0-9a-zA-Z$]+\('(?:0|\\x30)'\);}else\{_?[0-9a-zA-Z$]+\(\);}}\)\(\);}\(\)\);var _?[0-9a-zA-Z$]+=function\(_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=true;return function\(_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+='\u202e?';var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\?function\(\)\{if\(\(?_?[0-9a-zA-Z$]+==='\u202e?'\)?&&_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\['apply']\(_?[0-9a-zA-Z$]+,arguments\);_?[0-9a-zA-Z$]+=null;return _?[0-9a-zA-Z$]+;}}:function\(_?[0-9a-zA-Z$]+\)\{};_?[0-9a-zA-Z$]+=false;var _?[0-9a-zA-Z$]+='\u202e?';return _?[0-9a-zA-Z$]+;};}\(\);)?var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\(this,function\(\)\{var _?[0-9a-zA-Z$]+=function\(\)\{};var _?[0-9a-zA-Z$]+(?:=\(?typeof window!=='undefined'\)?\?window:\(?typeof process==='object'\)?&&\(?typeof require==='function'\)?&&\(?typeof global==='object'\)?\?global:this;|;try\{var _?[0-9a-zA-Z$]+=Function\('return \(function\(\) '\+'\{}\.constructor\("return this"\)\( \)'\+'\\x29\\x3b'\);_?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\(\);}catch\(_?[0-9a-zA-Z$]+\)\{_?[0-9a-zA-Z$]+=window;})if\(!_?[0-9a-zA-Z$]+\['console']\)\{_?[0-9a-zA-Z$]+\['console']=function\(_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=\{};_?[0-9a-zA-Z$]+\['log']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['warn']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['debug']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['info']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['error']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['exception']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['trace']=_?[0-9a-zA-Z$]+;return _?[0-9a-zA-Z$]+;}\(_?[0-9a-zA-Z$]+\);}else\{_?[0-9a-zA-Z$]+\['console']\['log']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['console']\['warn']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['console']\['debug']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['console']\['info']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['console']\['error']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['console']\['exception']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['console']\['trace']=_?[0-9a-zA-Z$]+;}}\);_?[0-9a-zA-Z$]+\(\);/g;
+	let searchRes;
+	while ((searchRes = preSearchRegexp.exec(jsStr))) {
+		logger.weakUpdate();
+		let startPos = searchRes.index, endPos = startPos + searchRes[0].length;
+		if (/^(?:var _?[0-9a-zA-Z$]+=function\(_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=true;return function\(_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+='(?:S{1})?';var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\?function\(\)\{if\(\(?_?[0-9a-zA-Z$]+==='(?:S{1})?'\)?&&_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\['S{5}']\(_?[0-9a-zA-Z$]+,arguments\);_?[0-9a-zA-Z$]+=null;return _?[0-9a-zA-Z$]+;}}:function\(_?[0-9a-zA-Z$]+\)\{};_?[0-9a-zA-Z$]+=false;var _?[0-9a-zA-Z$]+='(?:S{1})?';return _?[0-9a-zA-Z$]+;};}\(\);)?(?:\(function\(\)\{_?[0-9a-zA-Z$]+\(this,function\(\)\{var _?[0-9a-zA-Z$]+=new RegExp\('S{18}'\);var _?[0-9a-zA-Z$]+=new RegExp\('S{70}','(?:S{1}|S{4})'\);var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\('S{4}'\);if\(!_?[0-9a-zA-Z$]+\['S{4}']\(_?[0-9a-zA-Z$]+\+'S{5}'\)\|\|!_?[0-9a-zA-Z$]+\['S{4}']\(_?[0-9a-zA-Z$]+\+'S{5}'\)\)\{_?[0-9a-zA-Z$]+\('(S{1}|S{4})'\);}else\{_?[0-9a-zA-Z$]+\(\);}}\)\(\);}\(\)\);var _?[0-9a-zA-Z$]+=function\(_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=true;return function\(_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+='(?:S{1})?';var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\?function\(\)\{if\(\(?_?[0-9a-zA-Z$]+==='(?:S{1})?'\)?&&_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\['S{5}']\(_?[0-9a-zA-Z$]+,arguments\);_?[0-9a-zA-Z$]+=null;return _?[0-9a-zA-Z$]+;}}:function\(_?[0-9a-zA-Z$]+\)\{};_?[0-9a-zA-Z$]+=false;var _?[0-9a-zA-Z$]+='(?:S{1})?';return _?[0-9a-zA-Z$]+;};}\(\);)?var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\(this,function\(\)\{var _?[0-9a-zA-Z$]+=function\(\)\{};var _?[0-9a-zA-Z$]+(?:=\(?typeof window!=='S{9}'\)?\?window:\(?typeof process==='S{6}'\)?&&\(?typeof require==='S{8}'\)?&&\(?typeof global==='S{6}'\)?\?global:this;|;try{var _?[0-9a-zA-Z$]+=Function\('S{19}'\+'S{32}'\+'S{8}'\);_?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\(\);}catch\(_?[0-9a-zA-Z$]+\)\{_?[0-9a-zA-Z$]+=window;})if\(!_?[0-9a-zA-Z$]+\['S{7}']\)\{_?[0-9a-zA-Z$]+\['S{7}']=function\(_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=\{};_?[0-9a-zA-Z$]+\['S{3}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{4}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{5}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{4}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{5}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{9}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{5}']=_?[0-9a-zA-Z$]+;return _?[0-9a-zA-Z$]+;}\(_?[0-9a-zA-Z$]+\);}else\{_?[0-9a-zA-Z$]+\['S{7}']\['S{3}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{4}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{5}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{4}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{5}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{9}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{5}']=_?[0-9a-zA-Z$]+;}}\);_?[0-9a-zA-Z$]+\(\);$/.test(transRes.slice(startPos, endPos))) {
+			jsStr = jsStr.replaceWithStr(startPos, endPos, "");
+			transRes = transRes.replaceWithStr(startPos, endPos, "");
+			preSearchRegexp.lastIndex = startPos;
+		} else {
+			pause(transRes.slice(startPos, endPos));
+		}
+	}
+	// 无限进入断点干扰HTML调试
+	let preSearchRegexp2 = /function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\)\{function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\)\{(?:var _?[0-9a-zA-Z$]+='\u202e?\u202e?';if\(\(?typeof _?[0-9a-zA-Z$]+==='string'\)?&&\(?_?[0-9a-zA-Z$]+==='\u202e?\u202e?'\)?\)\{var _?[0-9a-zA-Z$]+=function\(\)\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'Function\(arguments\[0]\+"'\+_?[0-9a-zA-Z$]+\)?\+'"\)\(\)'\);}\(_?[0-9a-zA-Z$]+\);}\('bugger'\)\('de'\)\);};return _?[0-9a-zA-Z$]+\(\);}else\{if\(\(?\(''\+\(?_?[0-9a-zA-Z$]+\/_?[0-9a-zA-Z$]+\)?\)\['length']!==0x1\)?\|\|\(?_?[0-9a-zA-Z$]+%0x14===0x0\)?\)\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'Function\(arguments\[0]\+("|\\x22)'\+_?[0-9a-zA-Z$]+\)?\+'("|\\x22)\)\(\)'\);}\(_?[0-9a-zA-Z$]+\);}\('bugger'\)\('de'\)\);;}else\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'Function\(arguments\[0]\+("|\\x22)'\+_?[0-9a-zA-Z$]+\)?\+'("|\\x22)\)\(\)'\);}\(_?[0-9a-zA-Z$]+\);}\('bugger'\)\('de'\)\);;}}|if\(typeof _?[0-9a-zA-Z$]+==='string'\)\{return function\(_?[0-9a-zA-Z$]+\)\{}\['constructor']\('debugger;'\)\['apply']\('counter'\);}else\{if\(\(?\(''\+\(?_?[0-9a-zA-Z$]+\/_?[0-9a-zA-Z$]+\)?\)\['length']!==0x1\)?\|\|\(?\(?_?[0-9a-zA-Z$]+%0x14\)?===0x0\)?\)\{\(function\(\)\{return true;}\['constructor']\('debu'\+'gger'\)\['call']\('action'\)\);}else\{\(function\(\)\{return false;}\['constructor']\('debu'\+'gger'\)\['apply']\('stateObject'\)\);}})_?[0-9a-zA-Z$]+\(\+\+_?[0-9a-zA-Z$]+\);}try\{if\(_?[0-9a-zA-Z$]+\)\{return _?[0-9a-zA-Z$]+;}else\{_?[0-9a-zA-Z$]+\(0x0\);}}catch\(_?[0-9a-zA-Z$]+\)\{}};/g;
+	let searchRes2;
+	while ((searchRes2 = preSearchRegexp2.exec(jsStr))) {
+		logger.weakUpdate();
+		let startPos = searchRes2.index, endPos = startPos + searchRes2[0].length;
+		if (/^function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\)\{function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\)\{(?:var _?[0-9a-zA-Z$]+='(?:S{2})?';if\(\(?typeof _?[0-9a-zA-Z$]+==='S{6}'\)?&&\(?_?[0-9a-zA-Z$]+==='(?:S{2})?'\)?\)\{var _?[0-9a-zA-Z$]+=function\(\)\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'(S{23}|S{26})'\+_?[0-9a-zA-Z$]+\)?\+'(S{4}|S{7})'\);}\(_?[0-9a-zA-Z$]+\);}\('S{6}'\)\('S{2}'\)\);};return _?[0-9a-zA-Z$]+\(\);}else\{if\(\(?\(''\+\(?_?[0-9a-zA-Z$]+\/_?[0-9a-zA-Z$]+\)?\)\['S{6}']!==0x1\)?\|\|\(?\(?_?[0-9a-zA-Z$]+%0x14\)?===0x0\)?\)\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'(S{23}|S{26})'\+_?[0-9a-zA-Z$]+\)?\+'(S{4}|S{7})'\);}\(_?[0-9a-zA-Z$]+\);}\('S{6}'\)\('S{2}'\)\);;}else\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'(S{23}|S{26})'\+_?[0-9a-zA-Z$]+\)?\+'(S{4}|S{7})'\);}\(_?[0-9a-zA-Z$]+\);}\('S{6}'\)\('S{2}'\)\);;}}|if\(typeof _?[0-9a-zA-Z$]+==='S{6}'\)\{return function\(_?[0-9a-zA-Z$]+\)\{}\['S{11}']\('S{9}'\)\['S{5}']\('S{7}'\);}else\{if\(\(?\(''\+\(?_?[0-9a-zA-Z$]+\/_?[0-9a-zA-Z$]+\)?\)\['S{6}']!==0x1\)?\|\|\(?\(?_?[0-9a-zA-Z$]+%0x14\)?===0x0\)?\)\{\(function\(\)\{return true;}\['S{11}']\('S{4}'\+'S{4}'\)\['S{4}']\('S{6}'\)\);}else\{\(function\(\)\{return false;}\['S{11}']\('S{4}'\+'S{4}'\)\['S{5}']\('S{11}'\)\);}})_?[0-9a-zA-Z$]+\(\+\+_?[0-9a-zA-Z$]+\);}try\{if\(_?[0-9a-zA-Z$]+\)\{return _?[0-9a-zA-Z$]+;}else\{_?[0-9a-zA-Z$]+\(0x0\);}}catch\(_?[0-9a-zA-Z$]+\)\{}};$/.test(transRes.slice(startPos, endPos))) {
+			jsStr = jsStr.replaceWithStr(startPos, endPos, "");
+			transRes = transRes.replaceWithStr(startPos, endPos, "");
+			preSearchRegexp2.lastIndex = startPos;
+		} else {
+			pause(transRes.slice(startPos, endPos));
+		}
+	}
+
+	return splitStatements(jsStr).filter(function (jsStr) {
+		logger.weakUpdate();
+		return !/^window\['setInterval']\(function\(\)\{function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)\{return \(?_?[0-9a-zA-Z$]+\+_?[0-9a-zA-Z$]+\)?;}var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\('jsj','iam'\),_?[0-9a-zA-Z$]+='\u202e?';if\(\(?\(?typeof _?[0-9a-zA-Z$ｉＯ]+==_?[0-9a-zA-Z$]+\('undefi','ned'\)\)?&&\(?_?[0-9a-zA-Z$]+==='\u202e?'\)?\)?\|\|\(?_?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$ｉＯ]+,'\u202e?'\)!=_?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+,'i.com.v'\),_?[0-9a-zA-Z$]+\['length']\),'\u202e?'\)\)?\)\{var _?[0-9a-zA-Z$]+=\[];while\(_?[0-9a-zA-Z$]+\['length']>-0x1\)\{_?[0-9a-zA-Z$]+\['push']\(_?[0-9a-zA-Z$]+\['length']\^0x2\);}}_?[0-9a-zA-Z$]+\(\);},0x7d0\);/.test(jsStr);
+	});
+}
+jsStatementsArr = clearEnvironmentLimit(jsStatementsArr, true);
+fs.writeFileSync("DecryptResult4.js", jsStatementsArr.join("\n"));
+
 logger.logWithoutDetermine("提升代码可读性");
 function decodeStr(txt) {
 	return eval(`(\`${txt.replace(/`/g, "\\`")}\`)`).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n");
@@ -1294,7 +1431,7 @@ function decryptFormat(globalJsArr) {
 					(transStrRes[hexNumberPos + activeNumStr.length].match(/[&|]/) == null || transStrRes[hexNumberPos + activeNumStr.length] === transStrRes[hexNumberPos + activeNumStr.length + 1]) &&
 					(transStrRes[hexNumberPos + activeNumStr.length].match(/[<>]/) == null || transStrRes[hexNumberPos + activeNumStr.length] !== transStrRes[hexNumberPos + activeNumStr.length + 1])
 				) {
-					statement = statement.replaceWithStr(hexNumberPos, hexNumberPos + activeNumStr.length, parseInt(activeNumStr, 16));
+					statement = statement.replaceWithStr(hexNumberPos, hexNumberPos + activeNumStr.length, parseInt(activeNumStr, 16).toString());
 				}
 			}
 		}
@@ -1394,61 +1531,63 @@ function decryptFormat(globalJsArr) {
 	});
 }
 jsStatementsArr = decryptFormat(jsStatementsArr);
-fs.writeFileSync("DecryptResult4.js", jsStatementsArr.join("\n"));
-
-logger.logWithoutProgress("格式化代码");
-function findAndFormatCodeBlock(jsArr, layer, isShowProgress) {
-	return jsArr.map(function (jsStr, progress) {
-		// 特殊情况会在前面添加前缀
-		let prefixCount = 0;
-		if (jsStr[0] === "\t") {
-			prefixCount = layer - /^\t+/.test(jsStr).toString().length + 1;
-		}
-
-		let transLayerRes = transLayer(jsStr);
-		let startPos = Number.POSITIVE_INFINITY;
-		while ((startPos === Number.POSITIVE_INFINITY || startPos - 1 >= 0) && (startPos = Math.max(
-			transLayerRes.lastIndexOf("{", startPos - 1),
-			transLayerRes.lastIndexOf("(", startPos - 1),
-			transLayerRes.lastIndexOf("[", startPos - 1)
-		)) !== -1) {
-			let endPos = getQuoteEndPos(jsStr, startPos);
-			if (jsStr[startPos] === "{") {
-				// 拆分代码并顺便清理空语句
-				let splitStatementsRes = splitStatements(jsStr.slice(startPos + 1, endPos)).filter(function (statement) {
-					return statement !== ";";
-				});
-				if (splitStatementsRes.length) {
-					let isCaseBlock = /^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~ ]|default:)/.test(transStr(splitStatementsRes[0]).slice(0, 8));
-					let padTabs = "\n" + "".padEnd(layer + prefixCount, "\t");
-					if (isCaseBlock) {
-						splitStatementsRes = splitStatementsRes.map(function (statement) {
-							if (!/^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~ ]|default:)/.test(transStr(statement).slice(0, 8))) {
-								return "\t" + statement;
-							} else {
-								return statement;
-							}
-						});
-					}
-					jsStr = jsStr.replaceWithStr(startPos + 1, endPos, padTabs + findAndFormatCodeBlock(splitStatementsRes, layer + 1).join(padTabs) + padTabs.slice(0, -1));
-				} else {
-					let padTabs = "\n" + "".padEnd(layer + prefixCount, "\t");
-					jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndFormatCodeBlock([jsStr.slice(startPos + 1, endPos)], layer + 1).join(padTabs));
-				}
-				continue;
-			}
-			jsStr = jsStr.replaceWithStr(startPos + 1, endPos, findAndFormatCodeBlock([jsStr.slice(startPos + 1, endPos)], layer).join("\n" + "".padEnd(layer, "\t")));
-		}
-		if (isShowProgress) {
-			logger.logWithProgress("格式化代码", progress + 1, jsArr.length);
-		}
-		return jsStr;
-	});
-}
-jsStatementsArr = findAndFormatCodeBlock(jsStatementsArr, 1, true);
 fs.writeFileSync("DecryptResult5.js", jsStatementsArr.join("\n"));
 
-const END_TIMESTAMP = new Date().getTime();
+logger.logWithoutProgress("格式化代码");
+function findAndFormatCodeBlock(jsStr, needSplit = true, isRoot = true) {
+	if (Array.isArray(jsStr)) {
+		let jsArr = jsStr.map(function (jsPartStr, progress) {
+			logger.logWithProgress("格式化代码", progress, jsStr.length);
+			return findAndFormatCodeBlock(jsPartStr, needSplit, isRoot);
+		});
+		logger.logWithProgress("格式化代码", 1, 1);
+		return jsArr;
+	}
+	let transLayerRes = transLayer(jsStr);
+	let searchRegexp = /[{(\[]Q+[\])}]/g, searchRes;
+	while (searchRes = searchRegexp.exec(transLayerRes)) {
+		let startPos = searchRes.index + 1, endPos = startPos + searchRes[0].length - 2;
+		let formatRes = findAndFormatCodeBlock(jsStr.slice(startPos, endPos), searchRes[0][0] === '{', false);
+		jsStr = jsStr.replaceWithStr(startPos, endPos, formatRes);
+		transLayerRes = transLayerRes.replaceWithStr(startPos, endPos, formatRes);
+		searchRegexp.lastIndex = startPos + formatRes.length + 1;
+	}
+	if (needSplit) {
+		let splitStatementsRes = splitStatements(jsStr);
+		switch (splitStatementsRes.type) {
+			case "EMPTY":
+				break;
+			case "COMMON":
+				if (!isRoot) {
+					jsStr = ("\n" + splitStatementsRes.join('\n')).replace(/\n/g, "\n\t") + "\n";
+				}
+				break;
+			case "OBJECT":
+				break;
+			case "SWITCH_CASE":
+				for (let index = 0; index < splitStatementsRes.length; index++) {
+					let jsStr = splitStatementsRes[index];
+					if (/^(case[!"'(+\-.\[{~ ]|default:)/.test(jsStr)) {
+						if (splitStatementsRes[index + 1]?.[0] === '{') {
+							jsStr += '{';
+							splitStatementsRes[index + 1] = splitStatementsRes[index + 1].slice(2, -2).replace(/(\t*)\t/g, "$1");
+							splitStatementsRes.splice(index + 2, 0, '}');
+						}
+						splitStatementsRes[index] = jsStr;
+					} else if (jsStr !== '}') {
+						splitStatementsRes[index] = "\t" + jsStr.replace(/\n/g, "\n\t");
+					}
+				}
+				jsStr = ("\n" + splitStatementsRes.join('\n')).replace(/\n/g, "\n\t") + "\n";
+				break;
+		}
+	}
+	return jsStr;
+}
+jsStatementsArr = findAndFormatCodeBlock(jsStatementsArr);
+fs.writeFileSync("DecryptResult6.js", jsStatementsArr.join("\n"));
+
+const END_TIMESTAMP = Date.now();
 
 logger.logWithoutProgress(`解密完成！
 耗时：${END_TIMESTAMP - START_TIMESTAMP - PAUSE_TIME}ms`);
