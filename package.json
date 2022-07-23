@@ -1,6 +1,6 @@
 {
 	"name": "jsjiami-v6-decryptor",
-	"version": "2.7.4",
+	"version": "2.8.0",
 	"description": "A decryptor for JsjiamiV6.",
 	"keywords": ["javascript", "decryptor", "jsjiami", "v6"],
 	"homepage": "https://github.com/NXY666/JsjiamiV6-Decryptor",
@@ -11,7 +11,7 @@
 	"author": "NXY666",
 	"main": "Decryptor.js",
 	"optionalDependencies": {
-		"vm2": "^3.9.9"
+		"vm2": "^3.9.10"
 	},
 	"scripts": {
 		"decrypt": "node Decryptor.js"

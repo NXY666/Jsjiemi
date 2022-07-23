@@ -1,5 +1,6 @@
 /.idea/
 /decryptv6.iml
+/node_modules/
 /本地文件/
 /template/
 /DecryptResult0.js
@@ -8,6 +9,6 @@
 /DecryptResult3.js
 /DecryptResult4.js
 /DecryptResult5.js
+/DecryptResult6.js
 /target.js
-/node_modules/
 /package-lock.json
