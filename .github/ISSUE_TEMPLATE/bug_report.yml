@@ -2,8 +2,6 @@ name: BUG反馈
 description: 反馈使用解密器的过程中遇到的错误和漏洞。
 labels:
   - BUG
-assignees:
-  - NXY666
 body:
   - type: dropdown
     id: OperatingSystem
