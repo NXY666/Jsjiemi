@@ -2,8 +2,6 @@ name: 功能建议
 description: 发表与解密器相关的功能建议。
 labels:
   - 建议
-assignees:
-  - NXY666
 body:
   - type: textarea
     id: Details
