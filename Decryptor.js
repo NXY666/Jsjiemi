@@ -1,7 +1,7 @@
 /**
  * JsjiamiV6解密工具
  * @author NXY666
- * @version 2.8.0
+ * @version 2.8.1
  */
 const fs = require("fs");
 const readline = require("readline");
@@ -78,7 +78,7 @@ String.prototype.searchOf = function (regexp, position = 0) {
 String.prototype.lastSearchOf = function (regexp, position = Number.POSITIVE_INFINITY) {
 	let srcReg = regexp;
 	if (regexp instanceof RegExp) {
-		regexp = new RegExp(`[\\s\\S]*(?=(${regexp.source}))`, regexp.flags.replace(/g/g, ''));
+		regexp = new RegExp(`[\\s\\S]*(?=(?:${regexp.source}))`, regexp.flags.replace(/g/g, ''));
 	} else {
 		return this.lastIndexOf(regexp, position);
 	}
@@ -369,7 +369,7 @@ function transStr(jsStr) {
 						nowPos = endPos + 1;
 					} else if (jsArr[nowPos + 1] === '/') {
 						// 行注释
-						let endPos = jsStr.searchOf(/(\n|\r|\n\r|\r\n)/, nowPos);
+						let endPos = jsStr.searchOf(/\n|\r|\n\r|\r\n/, nowPos);
 						jsArr.fill("C", nowPos + 2, endPos);
 						nowPos = endPos - 1;
 					} else if (nowPos === 0 || jsArr[jsStr.lastSearchOf(/\S/, nowPos - 1)].match(/[\[{(+\-*<>=?&|!~^:;,]/)) {
@@ -520,14 +520,14 @@ function getQuoteEndPos(jsStr, startPos) {
 function splitStatements(jsStr, statementType) {
 	let transLayerRes = transLayer(jsStr), splitJsArr = [];
 	if (statementType === undefined) {
-		let tmpStr = transLayerRes.replace(/([0-9a-zA-Z])+/g, "W");
+		let tmpStr = transLayerRes.replace(/[0-9a-zA-Z]+/g, "W");
 		if (tmpStr === "" || tmpStr === ";") {
 			// 空
 			statementType = "EMPTY";
-		} else if (/^([^,:;]+:[^,:;]+,)*[^,:;]+:[^,:;]+$/.test(tmpStr)) {
+		} else if (/^(?:[^,:;]+:[^,:;]+,)*[^,:;]+:[^,:;]+$/.test(tmpStr)) {
 			// 对象
 			statementType = "OBJECT";
-		} else if (/^(case[!"%&'(*+,\-.\/:;<=>?@\[^{|~ ]|default:)/.test(transLayerRes.slice(0, 8))) {
+		} else if (/^(?:case[!"%&'(*+,\-.\/:;<=>?@\[^{|~ ]|default:)/.test(transLayerRes.slice(0, 8))) {
 			// case
 			statementType = "SWITCH_CASE";
 		} else {
@@ -552,7 +552,7 @@ function splitStatements(jsStr, statementType) {
 				let partJsStr = jsStr.slice(startPos, endPos + 1),
 					transPartJsStr = transLayerRes.slice(startPos, endPos + 1);
 				if (statementType === "SWITCH_CASE") {
-					if (/^(case[!"'(+\-.\[{~ ]|default:)/.test(transPartJsStr.slice(0, 8))) {
+					if (/^(?:case[!"'(+\-.\[{~ ]|default:)/.test(transPartJsStr.slice(0, 8))) {
 						// switch...case
 						endPos = (() => {
 							let reg = /[?:]/g, res, cnt = 0;
@@ -573,12 +573,12 @@ function splitStatements(jsStr, statementType) {
 						}
 					} else if ((() => {
 						let matchRes =
-							transLayerRes.slice(startPos).match(/^(yield )?(await )?if\(Q+\){?.*?(};|;|})(else if\(Q+\){?.*?(};|;|}))*(else{?.*?(};|;|}))?/) || // if...else
-							transPartJsStr.match(/^(yield )?(await )?(async )?function\*? [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
-							transPartJsStr.match(/^(yield )?(await )?(for|while|with)\(Q+\){?.*?(};|;|})/) || // for / while / with（花括号可省略，需判断）
-							transPartJsStr.match(/^(yield )?(await )?do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
-							transPartJsStr.match(/^(yield )?(await )?try{Q*}catch\(Q+\){Q*};?/) || // try...catch（两个花括号都不能省，所以无需判断）
-							transPartJsStr.match(/^(yield )?(await )?switch\(Q+\){Q*};?/); // switch（两个花括号都不能省，所以无需判断）
+							transLayerRes.slice(startPos).match(/^(?:yiled )?(?:await )?if\(Q+\){?.*?(?:};|;|})(?:else if\(Q+\){?.*?(};|;|}))*(?:else{?.*?(};|;|}))?/) || // if...else
+							transPartJsStr.match(/^(?:yiled )?(?:await )?(?:async )?function\*? [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
+							transPartJsStr.match(/^(?:yiled )?(?:await )?(?:for|while|with)\(Q+\){?.*?(?:};|;|})/) || // for / while / with（花括号可省略，需判断）
+							transPartJsStr.match(/^(?:yiled )?(?:await )?do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
+							transPartJsStr.match(/^(?:yiled )?(?:await )?try{Q*}(?:catch(?:\(Q+\))?{Q*})?(?:finally{Q*})?;?/) || // try...catch（两个花括号都不能省，所以无需判断）
+							transPartJsStr.match(/^(?:yiled )?(?:await )?switch\(Q+\){Q*};?/); // switch（两个花括号都不能省，所以无需判断）
 						return matchRes && (endPos = startPos + matchRes[0].length);
 					})()) {
 						splitJsArr.push(jsStr.slice(startPos, endPos));
@@ -590,12 +590,12 @@ function splitStatements(jsStr, statementType) {
 					}
 				} else if ((() => {
 					let matchRes =
-						transLayerRes.slice(startPos).match(/^(yiled )?(await )?if\(Q+\){?.*?(};|;|})(else if\(Q+\){?.*?(};|;|}))*(else{?.*?(};|;|}))?/) || // if...else
-						transPartJsStr.match(/^(yiled )?(await )?(async )?function\* [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
-						transPartJsStr.match(/^(yiled )?(await )?(for|while|with)\(Q+\){?.*?(};|;|})/) || // for / while / with（花括号可省略，需判断）
-						transPartJsStr.match(/^(yiled )?(await )?do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
-						transPartJsStr.match(/^(yiled )?(await )?try{Q*}catch\(Q+\){Q*};?/) || // try...catch（两个花括号都不能省，所以无需判断）
-						transPartJsStr.match(/^(yiled )?(await )?switch\(Q+\){Q*};?/); // switch（两个花括号都不能省，所以无需判断）
+						transLayerRes.slice(startPos).match(/^(?:yiled )?(?:await )?if\(Q+\){?.*?(?:};|;|})(?:else if\(Q+\){?.*?(};|;|}))*(?:else{?.*?(};|;|}))?/) || // if...else
+						transPartJsStr.match(/^(?:yiled )?(?:await )?(?:async )?function\*? [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
+						transPartJsStr.match(/^(?:yiled )?(?:await )?(?:for|while|with)\(Q+\){?.*?(?:};|;|})/) || // for / while / with（花括号可省略，需判断）
+						transPartJsStr.match(/^(?:yiled )?(?:await )?do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
+						transPartJsStr.match(/^(?:yiled )?(?:await )?try{Q*}catch\(Q+\){Q*}(?:finally{Q*})?;?/) || // try...catch（两个花括号都不能省，所以无需判断）
+						transPartJsStr.match(/^(?:yiled )?(?:await )?switch\(Q+\){Q*};?/); // switch（两个花括号都不能省，所以无需判断）
 					return matchRes && (endPos = startPos + matchRes[0].length);
 				})()) {
 					splitJsArr.push(jsStr.slice(startPos, endPos));
@@ -605,7 +605,7 @@ function splitStatements(jsStr, statementType) {
 					splitJsArr.push(jsStr.slice(startPos, endPos + 1));
 					startPos = endPos + 1;
 				}
-			} while (statementType === "SWITCH_CASE" ? (endPos = transLayerRes.searchOf(/[;:}](case[!"'(+\-.\[{~ ]|default:)/, startPos)) !== -1 : (endPos = transLayerRes.indexOf(";", startPos)) !== -1);
+			} while (statementType === "SWITCH_CASE" ? (endPos = transLayerRes.searchOf(/[;:}](?:case[!"'(+\-.\[{~ ]|default:)/, startPos)) !== -1 : (endPos = transLayerRes.indexOf(";", startPos)) !== -1);
 			if (startPos < jsStr.length) {
 				splitJsArr.push(...splitStatements(jsStr.slice(startPos)));
 			}
@@ -628,7 +628,7 @@ const JSON5 = {
 		let commentPos = Number.POSITIVE_INFINITY;
 		while ((commentPos === Number.POSITIVE_INFINITY || commentPos - 1 >= 0) && (commentPos = Math.max(
 			transRes.lastSearchOf(/\/\*C*\*\//, commentPos - 1),
-			transRes.lastSearchOf(/\/\/C*(\n|\r|\n\r|\r\n)/, commentPos - 1)
+			transRes.lastSearchOf(/\/\/C*(?:\n|\r|\n\r|\r\n)/, commentPos - 1)
 		)) !== -1) {
 			switch (transRes[commentPos + 1]) {
 				case '*': {
@@ -637,7 +637,7 @@ const JSON5 = {
 					break;
 				}
 				case '/': {
-					let lineComment = transRes.slice(commentPos).match(/^\/\/C*(\n|\r|\n\r|\r\n)/)[0];
+					let lineComment = transRes.slice(commentPos).match(/^\/\/C*(?:\n|\r|\n\r|\r\n)/)[0];
 					jsonStr = jsonStr.replaceWithStr(commentPos, commentPos + lineComment.length, "");
 					break;
 				}
@@ -707,7 +707,7 @@ function compressionCode(jsStr) {
 	let commentPos = Number.POSITIVE_INFINITY;
 	while ((commentPos === Number.POSITIVE_INFINITY || commentPos - 1 >= 0) && (commentPos = Math.max(
 		transRes.lastSearchOf(/\/\*C*\*\//, commentPos - 1),
-		transRes.lastSearchOf(/\/\/C*(\n|\r|\n\r|\r\n)/, commentPos - 1)
+		transRes.lastSearchOf(/\/\/C*(?:\n|\r|\n\r|\r\n)/, commentPos - 1)
 	)) !== -1) {
 		logger.weakUpdate();
 		switch (transRes[commentPos + 1]) {
@@ -717,7 +717,7 @@ function compressionCode(jsStr) {
 				break;
 			}
 			case '/': {
-				let lineComment = transRes.slice(commentPos).match(/^\/\/C*(\n|\r|\n\r|\r\n)/)[0];
+				let lineComment = transRes.slice(commentPos).match(/^\/\/C*(?:\n|\r|\n\r|\r\n)/)[0];
 				jsStr = jsStr.replaceWithStr(commentPos, commentPos + lineComment.length, "");
 				break;
 			}
@@ -747,6 +747,55 @@ js = compressionCode(js);
 fs.writeFileSync("DecryptResult0.js", js);
 
 logger.logWithoutDetermine("解除全局加密");
+const STATEMENTS_TYPE_SCHEMAS = {
+	signInfo: {
+		"Self": /^var (?:_?[0-9a-zA-Z$ｉＯ]+?='S+?',(?:_?[0-9a-zA-Z$ｉＯ]+?_=\['S+?'],)?)?_?[0-9a-zA-Z$]+=\[_?[0-9a-zA-Z$ｉＯ']+?(?:,'S+?')*?];?/
+	},
+	preprocessFunction: {
+		// _0x102809='po';var _0x111dc8='shift',_0x47c13d='push'
+		"PoShiftPushString": /_?[0-9a-zA-Z$]+='po';var _?[0-9a-zA-Z$]+='shift',_?[0-9a-zA-Z$]+='push'/,
+		// while(--_0x1f4621){
+		"DecreasingLoop": /while\(--_?[0-9a-zA-Z$]+\)\{/,
+		// _0x362d54=_0x5845c1,_0x2576f4=_0x2d8f05[_0x4fbc7a+'p']();
+		"AddPFunction": /_?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\[_?[0-9a-zA-Z$]+\+'p']\(\);/,
+		// ['replace'](/[zUrTestTestZTest=]/g,'')
+		"ReplaceBase64RegExp": /\['replace']\(\/\[[0-9a-zA-Z]*?=]\/g,''\)/,
+		// c['push'](c['shift']());
+		"PushAndShift": /_?[0-9a-zA-Z$]+\['push']\(_?[0-9a-zA-Z$]+\['shift']\(\)\)/,
+		// return _0x43c762(++_0x3c2786,_0x2db158)>>_0x3c2786^_0x2db158;
+		"ReturnWith++And>>And^": /return _?[0-9a-zA-Z$]+\(\+\+_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)>>_?[0-9a-zA-Z$]+\^_?[0-9a-zA-Z$]+/,
+		// var _0xeaaebc={'data':{'key':'cookie','value':'timeout'}
+		"CookieTimeoutDataObject": /var _?[0-9a-zA-Z$]+=\{'data':\{'key':'cookie','value':'timeout'}/,
+		// new RegExp\(\'\(\?\:\^\|\;\\x20\)\'\+_0x49a403\[\'replace\'\]\(\/\(\[\.\$\?\*\|\{\}\(\)\[\]\\\/\+\^\]\)\/g\,\'\$1\'\)\+\'\=\(\[\^\;\]\*\)\'\)
+		"SignReplaceRegExp": /new RegExp\('\(\?:\^\|;\\x20\)'\+_?[0-9a-zA-Z$]+\['replace']\(\/\(\[\.\$\?\*\|\{}\(\)\[]\\\/\+\^]\)\/g,'\$1'\)\+'=\(\[\^;]\*\)'\)/,
+		// new RegExp('\x5cw+\x20*\x5c(\x5c)\x20*{\x5cw+\x20*[\x27|\x22].+[\x27|\x22];?\x20*}');
+		"EscapedRegExp": /new RegExp\('\\x5cw+\\x20*\\x5c\(\\x5c\)\\x20\*\{\\x5cw\+\\x20\*\[\\x27|\\x22]\.\+\[\\x27|\\x22];\?\\x20*}'\);/
+	},
+	decryptor: {
+		/* 有预处理函数 */
+		// _0x542044=~~'0x'['concat'](_0x542044
+		"DoubleWaveConcat": /_?[0-9a-zA-Z$]+=~~'0x'\['concat']\(_?[0-9a-zA-Z$]+/,
+		// Function('return\x20(function()\x20'+'{}.constructor(\x22return\x20this\x22)(\x20)'+');')
+		"FunctionConstructorString": /Function\('return\\x20\(function\(\)\\x20'\+'\{}\.constructor\(\\x22return\\x20this\\x22\)\(\\x20\)'\+'\);'\)/,
+		// var _0x3ef5fb=typeof window!=='undefined'?window:typeof process==='object'&&typeof require==='function'&&typeof global==='object'?global:this;
+		"WhatIsThis": /var _?[0-9a-zA-Z$]+=typeof window!=='undefined'\?window:typeof process==='object'&&typeof require==='function'&&typeof global==='object'\?global:this;/,
+		// var _0x1d2c53='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+		"CharSetString": /var _?[0-9a-zA-Z$]+='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\+\/=';/,
+		// '%'+('00'+_0x1f82f7['charCodeAt']
+		"ZeroPlusCharCodeAt": /'%'\+\('00'\+_?[0-9a-zA-Z$]+\['charCodeAt']/,
+		// _0x53656e['charCodeAt'](_0x578a24%_0x53656e['length']))%0x100;
+		"CharCodeAtLength": /_?[0-9a-zA-Z$]+\['charCodeAt']\(_?[0-9a-zA-Z$]+%_?[0-9a-zA-Z$]+\['length']\)\)%0x100;/,
+		// +=String['fromCharCode'](
+		"PlusStringFromCharCode": /\+=String\['fromCharCode']\(/,
+		/* 无预处理函数 */
+		// function _0x9549(_0x52aa18,_0x1a09ad){_0x52aa18=~~'0x'['concat'](_0x52aa18['slice'](0x0));var _0x4fe032=_0x34a7[_0x52aa18];return _0x4fe032;};
+		"WithoutPreprocess": /function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)\{_?[0-9a-zA-Z$]+=~~'0x'\['concat']\(_?[0-9a-zA-Z$]+\['slice']\(0x0\)\);var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\[_?[0-9a-zA-Z$]+];return _?[0-9a-zA-Z$]+;};/
+	},
+	verifyFunction: {
+		// for(_0x36eaeb=_0x39941e['shift'](_0x422e9c>>0x2);_0x36eaeb&&_0x36eaeb!==(_0x39941e['pop'](_0x422e9c>>0x3)+'')['replace'](/[ChUlbeWOEtLSnTtk=]/g,'');_0x422e9c++)
+		"Self": /for\(_?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\['shift']\(_?[0-9a-zA-Z$]+>>0x2\);_?[0-9a-zA-Z$]+&&_?[0-9a-zA-Z$]+!==\(_?[0-9a-zA-Z$]+\['pop']\(_?[0-9a-zA-Z$]+>>0x3\)\+''\)\['replace']\(\/\[[a-zA-Z]+=?]\/g,''\);_?[0-9a-zA-Z$]+\+\+\)/
+	}
+};
 const GLOBAL_DECRYPTOR_INFO = {
 	signInfo: {
 		name: null,
@@ -768,55 +817,6 @@ const GLOBAL_DECRYPTOR_INFO = {
 		type: null,
 		name: null,
 		raw: null
-	}
-};
-const STATEMENTS_TYPE_SCHEMAS = {
-	signInfo: {
-		"Self": /^var (_?[0-9a-zA-Z$ｉＯ]+?='S+?',(_?[0-9a-zA-Z$ｉＯ]+?_=\['S+?'],)?)?_?[0-9a-zA-Z$]+=\[_?[0-9a-zA-Z$ｉＯ']+?(,'S+?')*?];?/
-	},
-	preprocessFunction: {
-		// _0x102809='po';var _0x111dc8='shift',_0x47c13d='push'
-		"PoShiftPushString": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})='po';var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})='shift',(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})='push'/,
-		// while(--_0x1f4621){
-		"DecreasingLoop": /while\(--(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\)\{/,
-		// _0x362d54=_0x5845c1,_0x2576f4=_0x2d8f05[_0x4fbc7a+'p']();
-		"AddPFunction": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3}),(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\[(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\+'p']\(\);/,
-		// ['replace'](/[zUrTestTestZTest=]/g,'')
-		"ReplaceBase64RegExp": /\['replace']\(\/\[[0-9a-zA-Z]*?=]\/g,''\)/,
-		// c['push'](c['shift']());
-		"PushAndShift": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['push']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['shift']\(\)\)/,
-		// return _0x43c762(++_0x3c2786,_0x2db158)>>_0x3c2786^_0x2db158;
-		"ReturnWith++And>>And^": /return (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\(\+\+(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3}),(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\)>>(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\^(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})/,
-		// var _0xeaaebc={'data':{'key':'cookie','value':'timeout'}
-		"CookieTimeoutDataObject": /var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=\{'data':\{'key':'cookie','value':'timeout'}/,
-		// new RegExp\(\'\(\?\:\^\|\;\\x20\)\'\+_0x49a403\[\'replace\'\]\(\/\(\[\.\$\?\*\|\{\}\(\)\[\]\\\/\+\^\]\)\/g\,\'\$1\'\)\+\'\=\(\[\^\;\]\*\)\'\)
-		"SignReplaceRegExp": /new RegExp\('\(\?:\^\|;\\x20\)'\+(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['replace']\(\/\(\[\.\$\?\*\|\{}\(\)\[]\\\/\+\^]\)\/g,'\$1'\)\+'=\(\[\^;]\*\)'\)/,
-		// new RegExp('\x5cw+\x20*\x5c(\x5c)\x20*{\x5cw+\x20*[\x27|\x22].+[\x27|\x22];?\x20*}');
-		"EscapedRegExp": /new RegExp\('\\x5cw+\\x20*\\x5c\(\\x5c\)\\x20\*\{\\x5cw\+\\x20\*\[\\x27|\\x22]\.\+\[\\x27|\\x22];\?\\x20*}'\);/
-	},
-	decryptor: {
-		/* 有预处理函数 */
-		// _0x542044=~~'0x'['concat'](_0x542044
-		"DoubleWaveConcat": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=~~'0x'\['concat']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})/,
-		// Function('return\x20(function()\x20'+'{}.constructor(\x22return\x20this\x22)(\x20)'+');')
-		"FunctionConstructorString": /Function\('return\\x20\(function\(\)\\x20'\+'\{}\.constructor\(\\x22return\\x20this\\x22\)\(\\x20\)'\+'\);'\)/,
-		// var _0x3ef5fb=typeof window!=='undefined'?window:typeof process==='object'&&typeof require==='function'&&typeof global==='object'?global:this;
-		"WhatIsThis": /var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=typeof window!=='undefined'\?window:typeof process==='object'&&typeof require==='function'&&typeof global==='object'\?global:this;/,
-		// var _0x1d2c53='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-		"CharSetString": /var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789\+\/=';/,
-		// '%'+('00'+_0x1f82f7['charCodeAt']
-		"ZeroPlusCharCodeAt": /'%'\+\('00'\+(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['charCodeAt']/,
-		// _0x53656e['charCodeAt'](_0x578a24%_0x53656e['length']))%0x100;
-		"CharCodeAtLength": /(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['charCodeAt']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})%(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['length']\)\)%0x100;/,
-		// +=String['fromCharCode'](
-		"PlusStringFromCharCode": /\+=String\['fromCharCode']\(/,
-		/* 无预处理函数 */
-		// function _0x9549(_0x52aa18,_0x1a09ad){_0x52aa18=~~'0x'['concat'](_0x52aa18['slice'](0x0));var _0x4fe032=_0x34a7[_0x52aa18];return _0x4fe032;};
-		"WithoutPreprocess": /function (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3}),(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\)\{(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=~~'0x'\['concat']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['slice']\(0x0\)\);var (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\[(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})];return (_0x[0-9a-f]{4,6}|[a-z0-9]{1,3});};/
-	},
-	verifyFunction: {
-		// for(_0x36eaeb=_0x39941e['shift'](_0x422e9c>>0x2);_0x36eaeb&&_0x36eaeb!==(_0x39941e['pop'](_0x422e9c>>0x3)+'')['replace'](/[ChUlbeWOEtLSnTtk=]/g,'');_0x422e9c++)
-		"Self": /for\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})=(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['shift']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})>>0x2\);(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})&&(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})!==\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\['pop']\((_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})>>0x3\)\+''\)\['replace']\(\/\[[a-zA-Z]+=?]\/g,''\);(_0x[0-9a-f]{4,6}|[a-z0-9]{1,3})\+\+\)/
 	}
 };
 function getStatementsType(jsArr) {
@@ -1069,7 +1069,7 @@ function getCodeBlockDecryptorName(jsStr) {
 	let checkRes = transLayer2Res.slice(startPos, endPos).split(",").every(function (objectItem) {
 		let itemTransRes = transStrRes.slice(strScanLen, strScanLen + objectItem.length);
 		let itemTransLayer2Res = transLayer(itemTransRes, 2, true);
-		if (objectItem.match(/^'(S)+':'(S)+'$/) || itemTransLayer2Res.match(/^'S+':function\([^)]*\)\{return[^;]*;}$/)) {
+		if (objectItem.match(/^'S+':'S+'$/) || itemTransLayer2Res.match(/^'S+':function\([^)]*\)\{return[^;]*;}$/)) {
 			strScanLen += objectItem.length + 1;
 			return true;
 		} else {
@@ -1276,7 +1276,7 @@ function clearDeadCodes(jsArr, isShowProgress) {
 		}
 	} else if (jsArr.length === 2) {
 		// switch死代码
-		if (/^var (\S+?)='[0-9|]*?'\['split']\('\|'\),(\S+?)=0x0;/.test(jsArr[0]) && /^while\(true\){switch\((\S+?)\[(\S+?)\+\+]\)/.test(jsArr[1])) {
+		if (/^var \S+?='[0-9|]*?'\['split']\('\|'\),\S+?=0x0;/.test(jsArr[0]) && /^while\(true\){switch\(\S+?\[\S+?\+\+]\)/.test(jsArr[1])) {
 			let initMatch = jsArr[0].match(/var (\S+?)='[0-9|]*?'\['split']\('\|'\),(\S+?)=0x0;/),
 				whileMatch = jsArr[1].match(/while\(true\){switch\((\S+?)\[(\S+?)\+\+]\)/);
 			let sequence;
@@ -1311,10 +1311,10 @@ function clearDeadCodes(jsArr, isShowProgress) {
 		}
 	} else if (jsArr.length === 3) {
 		// switch死代码
-		if (/^var (\S+?)='[0-9|]*?'\['split']\('\|'\);/.test(jsArr[0]) && /^var (\S+?)=0x0;/.test(jsArr[1]) && /^while\(true\){switch\((\S+?)\[(\S+?)\+\+]\)/.test(jsArr[2])) {
-			let initMatch0 = jsArr[0].match(/^var (\S+?)='[0-9|]*?'\['split']\('\|'\);$/),
-				initMatch1 = jsArr[1].match(/^var (\S+?)=0x0;$/),
-				whileMatch = jsArr[2].match(/while\(true\){switch\((\S+?)\[(\S+?)\+\+]\)/);
+		if (/^var \S+='[0-9|]*?'\['split']\('\|'\);/.test(jsArr[0]) && /^var \S+=0x0;/.test(jsArr[1]) && /^while\(true\){switch\(\S+\[\S+\+\+]\)/.test(jsArr[2])) {
+			let initMatch0 = jsArr[0].match(/^var (\S+)='[0-9|]*?'\['split']\('\|'\);$/),
+				initMatch1 = jsArr[1].match(/^var (\S+)=0x0;$/),
+				whileMatch = jsArr[2].match(/while\(true\){switch\((\S+)\[(\S+)\+\+]\)/);
 			let sequence;
 			if ((initMatch0 && initMatch0.length === 2 && initMatch1 && initMatch1.length === 2 && whileMatch && whileMatch.length === 3) &&
 				((sequence = initMatch0[1]) === whileMatch[1] && initMatch1[1] === whileMatch[2])) {
@@ -1363,7 +1363,7 @@ function clearEnvironmentLimit(jsArr) {
 	while ((searchRes = preSearchRegexp.exec(jsStr))) {
 		logger.weakUpdate();
 		let startPos = searchRes.index, endPos = startPos + searchRes[0].length;
-		if (/^(?:var _?[0-9a-zA-Z$]+=function\(_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=true;return function\(_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+='(?:S{1})?';var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\?function\(\)\{if\(\(?_?[0-9a-zA-Z$]+==='(?:S{1})?'\)?&&_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\['S{5}']\(_?[0-9a-zA-Z$]+,arguments\);_?[0-9a-zA-Z$]+=null;return _?[0-9a-zA-Z$]+;}}:function\(_?[0-9a-zA-Z$]+\)\{};_?[0-9a-zA-Z$]+=false;var _?[0-9a-zA-Z$]+='(?:S{1})?';return _?[0-9a-zA-Z$]+;};}\(\);)?(?:\(function\(\)\{_?[0-9a-zA-Z$]+\(this,function\(\)\{var _?[0-9a-zA-Z$]+=new RegExp\('S{18}'\);var _?[0-9a-zA-Z$]+=new RegExp\('S{70}','(?:S{1}|S{4})'\);var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\('S{4}'\);if\(!_?[0-9a-zA-Z$]+\['S{4}']\(_?[0-9a-zA-Z$]+\+'S{5}'\)\|\|!_?[0-9a-zA-Z$]+\['S{4}']\(_?[0-9a-zA-Z$]+\+'S{5}'\)\)\{_?[0-9a-zA-Z$]+\('(S{1}|S{4})'\);}else\{_?[0-9a-zA-Z$]+\(\);}}\)\(\);}\(\)\);var _?[0-9a-zA-Z$]+=function\(_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=true;return function\(_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+='(?:S{1})?';var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\?function\(\)\{if\(\(?_?[0-9a-zA-Z$]+==='(?:S{1})?'\)?&&_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\['S{5}']\(_?[0-9a-zA-Z$]+,arguments\);_?[0-9a-zA-Z$]+=null;return _?[0-9a-zA-Z$]+;}}:function\(_?[0-9a-zA-Z$]+\)\{};_?[0-9a-zA-Z$]+=false;var _?[0-9a-zA-Z$]+='(?:S{1})?';return _?[0-9a-zA-Z$]+;};}\(\);)?var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\(this,function\(\)\{var _?[0-9a-zA-Z$]+=function\(\)\{};var _?[0-9a-zA-Z$]+(?:=\(?typeof window!=='S{9}'\)?\?window:\(?typeof process==='S{6}'\)?&&\(?typeof require==='S{8}'\)?&&\(?typeof global==='S{6}'\)?\?global:this;|;try{var _?[0-9a-zA-Z$]+=Function\('S{19}'\+'S{32}'\+'S{8}'\);_?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\(\);}catch\(_?[0-9a-zA-Z$]+\)\{_?[0-9a-zA-Z$]+=window;})if\(!_?[0-9a-zA-Z$]+\['S{7}']\)\{_?[0-9a-zA-Z$]+\['S{7}']=function\(_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=\{};_?[0-9a-zA-Z$]+\['S{3}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{4}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{5}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{4}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{5}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{9}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{5}']=_?[0-9a-zA-Z$]+;return _?[0-9a-zA-Z$]+;}\(_?[0-9a-zA-Z$]+\);}else\{_?[0-9a-zA-Z$]+\['S{7}']\['S{3}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{4}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{5}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{4}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{5}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{9}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{5}']=_?[0-9a-zA-Z$]+;}}\);_?[0-9a-zA-Z$]+\(\);$/.test(transRes.slice(startPos, endPos))) {
+		if (/^(?:var _?[0-9a-zA-Z$]+=function\(_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=true;return function\(_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+='(?:S{1})?';var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\?function\(\)\{if\(\(?_?[0-9a-zA-Z$]+==='(?:S{1})?'\)?&&_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\['S{5}']\(_?[0-9a-zA-Z$]+,arguments\);_?[0-9a-zA-Z$]+=null;return _?[0-9a-zA-Z$]+;}}:function\(_?[0-9a-zA-Z$]+\)\{};_?[0-9a-zA-Z$]+=false;var _?[0-9a-zA-Z$]+='(?:S{1})?';return _?[0-9a-zA-Z$]+;};}\(\);)?(?:\(function\(\)\{_?[0-9a-zA-Z$]+\(this,function\(\)\{var _?[0-9a-zA-Z$]+=new RegExp\('S{18}'\);var _?[0-9a-zA-Z$]+=new RegExp\('S{70}','(?:S{1}|S{4})'\);var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\('S{4}'\);if\(!_?[0-9a-zA-Z$]+\['S{4}']\(_?[0-9a-zA-Z$]+\+'S{5}'\)\|\|!_?[0-9a-zA-Z$]+\['S{4}']\(_?[0-9a-zA-Z$]+\+'S{5}'\)\)\{_?[0-9a-zA-Z$]+\('(?:S{1}|S{4})'\);}else\{_?[0-9a-zA-Z$]+\(\);}}\)\(\);}\(\)\);var _?[0-9a-zA-Z$]+=function\(_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=true;return function\(_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+='(?:S{1})?';var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\?function\(\)\{if\(\(?_?[0-9a-zA-Z$]+==='(?:S{1})?'\)?&&_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\['S{5}']\(_?[0-9a-zA-Z$]+,arguments\);_?[0-9a-zA-Z$]+=null;return _?[0-9a-zA-Z$]+;}}:function\(_?[0-9a-zA-Z$]+\)\{};_?[0-9a-zA-Z$]+=false;var _?[0-9a-zA-Z$]+='(?:S{1})?';return _?[0-9a-zA-Z$]+;};}\(\);)?var _?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\(this,function\(\)\{var _?[0-9a-zA-Z$]+=function\(\)\{};var _?[0-9a-zA-Z$]+(?:=\(?typeof window!=='S{9}'\)?\?window:\(?typeof process==='S{6}'\)?&&\(?typeof require==='S{8}'\)?&&\(?typeof global==='S{6}'\)?\?global:this;|;try{var _?[0-9a-zA-Z$]+=Function\('S{19}'\+'S{32}'\+'S{8}'\);_?[0-9a-zA-Z$]+=_?[0-9a-zA-Z$]+\(\);}catch\(_?[0-9a-zA-Z$]+\)\{_?[0-9a-zA-Z$]+=window;})if\(!_?[0-9a-zA-Z$]+\['S{7}']\)\{_?[0-9a-zA-Z$]+\['S{7}']=function\(_?[0-9a-zA-Z$]+\)\{var _?[0-9a-zA-Z$]+=\{};_?[0-9a-zA-Z$]+\['S{3}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{4}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{5}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{4}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{5}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{9}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{5}']=_?[0-9a-zA-Z$]+;return _?[0-9a-zA-Z$]+;}\(_?[0-9a-zA-Z$]+\);}else\{_?[0-9a-zA-Z$]+\['S{7}']\['S{3}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{4}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{5}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{4}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{5}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{9}']=_?[0-9a-zA-Z$]+;_?[0-9a-zA-Z$]+\['S{7}']\['S{5}']=_?[0-9a-zA-Z$]+;}}\);_?[0-9a-zA-Z$]+\(\);$/.test(transRes.slice(startPos, endPos))) {
 			jsStr = jsStr.replaceWithStr(startPos, endPos, "");
 			transRes = transRes.replaceWithStr(startPos, endPos, "");
 			preSearchRegexp.lastIndex = startPos;
@@ -1372,12 +1372,12 @@ function clearEnvironmentLimit(jsArr) {
 		}
 	}
 	// 无限进入断点干扰HTML调试
-	let preSearchRegexp2 = /function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\)\{function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\)\{(?:var _?[0-9a-zA-Z$]+='\u202e?\u202e?';if\(\(?typeof _?[0-9a-zA-Z$]+==='string'\)?&&\(?_?[0-9a-zA-Z$]+==='\u202e?\u202e?'\)?\)\{var _?[0-9a-zA-Z$]+=function\(\)\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'Function\(arguments\[0]\+"'\+_?[0-9a-zA-Z$]+\)?\+'"\)\(\)'\);}\(_?[0-9a-zA-Z$]+\);}\('bugger'\)\('de'\)\);};return _?[0-9a-zA-Z$]+\(\);}else\{if\(\(?\(''\+\(?_?[0-9a-zA-Z$]+\/_?[0-9a-zA-Z$]+\)?\)\['length']!==0x1\)?\|\|\(?_?[0-9a-zA-Z$]+%0x14===0x0\)?\)\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'Function\(arguments\[0]\+("|\\x22)'\+_?[0-9a-zA-Z$]+\)?\+'("|\\x22)\)\(\)'\);}\(_?[0-9a-zA-Z$]+\);}\('bugger'\)\('de'\)\);;}else\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'Function\(arguments\[0]\+("|\\x22)'\+_?[0-9a-zA-Z$]+\)?\+'("|\\x22)\)\(\)'\);}\(_?[0-9a-zA-Z$]+\);}\('bugger'\)\('de'\)\);;}}|if\(typeof _?[0-9a-zA-Z$]+==='string'\)\{return function\(_?[0-9a-zA-Z$]+\)\{}\['constructor']\('debugger;'\)\['apply']\('counter'\);}else\{if\(\(?\(''\+\(?_?[0-9a-zA-Z$]+\/_?[0-9a-zA-Z$]+\)?\)\['length']!==0x1\)?\|\|\(?\(?_?[0-9a-zA-Z$]+%0x14\)?===0x0\)?\)\{\(function\(\)\{return true;}\['constructor']\('debu'\+'gger'\)\['call']\('action'\)\);}else\{\(function\(\)\{return false;}\['constructor']\('debu'\+'gger'\)\['apply']\('stateObject'\)\);}})_?[0-9a-zA-Z$]+\(\+\+_?[0-9a-zA-Z$]+\);}try\{if\(_?[0-9a-zA-Z$]+\)\{return _?[0-9a-zA-Z$]+;}else\{_?[0-9a-zA-Z$]+\(0x0\);}}catch\(_?[0-9a-zA-Z$]+\)\{}};/g;
+	let preSearchRegexp2 = /function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\)\{function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\)\{(?:var _?[0-9a-zA-Z$]+='\u202e?\u202e?';if\(\(?typeof _?[0-9a-zA-Z$]+==='string'\)?&&\(?_?[0-9a-zA-Z$]+==='\u202e?\u202e?'\)?\)\{var _?[0-9a-zA-Z$]+=function\(\)\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'Function\(arguments\[0]\+"'\+_?[0-9a-zA-Z$]+\)?\+'"\)\(\)'\);}\(_?[0-9a-zA-Z$]+\);}\('bugger'\)\('de'\)\);};return _?[0-9a-zA-Z$]+\(\);}else\{if\(\(?\(''\+\(?_?[0-9a-zA-Z$]+\/_?[0-9a-zA-Z$]+\)?\)\['length']!==0x1\)?\|\|\(?_?[0-9a-zA-Z$]+%0x14===0x0\)?\)\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'Function\(arguments\[0]\+(?:"|\\x22)'\+_?[0-9a-zA-Z$]+\)?\+'(?:"|\\x22)\)\(\)'\);}\(_?[0-9a-zA-Z$]+\);}\('bugger'\)\('de'\)\);;}else\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'Function\(arguments\[0]\+(?:"|\\x22)'\+_?[0-9a-zA-Z$]+\)?\+'(?:"|\\x22)\)\(\)'\);}\(_?[0-9a-zA-Z$]+\);}\('bugger'\)\('de'\)\);;}}|if\(typeof _?[0-9a-zA-Z$]+==='string'\)\{return function\(_?[0-9a-zA-Z$]+\)\{}\['constructor']\('debugger;'\)\['apply']\('counter'\);}else\{if\(\(?\(''\+\(?_?[0-9a-zA-Z$]+\/_?[0-9a-zA-Z$]+\)?\)\['length']!==0x1\)?\|\|\(?\(?_?[0-9a-zA-Z$]+%0x14\)?===0x0\)?\)\{\(function\(\)\{return true;}\['constructor']\('debu'\+'gger'\)\['call']\('action'\)\);}else\{\(function\(\)\{return false;}\['constructor']\('debu'\+'gger'\)\['apply']\('stateObject'\)\);}})_?[0-9a-zA-Z$]+\(\+\+_?[0-9a-zA-Z$]+\);}try\{if\(_?[0-9a-zA-Z$]+\)\{return _?[0-9a-zA-Z$]+;}else\{_?[0-9a-zA-Z$]+\(0x0\);}}catch\(_?[0-9a-zA-Z$]+\)\{}};/g;
 	let searchRes2;
 	while ((searchRes2 = preSearchRegexp2.exec(jsStr))) {
 		logger.weakUpdate();
 		let startPos = searchRes2.index, endPos = startPos + searchRes2[0].length;
-		if (/^function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\)\{function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\)\{(?:var _?[0-9a-zA-Z$]+='(?:S{2})?';if\(\(?typeof _?[0-9a-zA-Z$]+==='S{6}'\)?&&\(?_?[0-9a-zA-Z$]+==='(?:S{2})?'\)?\)\{var _?[0-9a-zA-Z$]+=function\(\)\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'(S{23}|S{26})'\+_?[0-9a-zA-Z$]+\)?\+'(S{4}|S{7})'\);}\(_?[0-9a-zA-Z$]+\);}\('S{6}'\)\('S{2}'\)\);};return _?[0-9a-zA-Z$]+\(\);}else\{if\(\(?\(''\+\(?_?[0-9a-zA-Z$]+\/_?[0-9a-zA-Z$]+\)?\)\['S{6}']!==0x1\)?\|\|\(?\(?_?[0-9a-zA-Z$]+%0x14\)?===0x0\)?\)\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'(S{23}|S{26})'\+_?[0-9a-zA-Z$]+\)?\+'(S{4}|S{7})'\);}\(_?[0-9a-zA-Z$]+\);}\('S{6}'\)\('S{2}'\)\);;}else\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'(S{23}|S{26})'\+_?[0-9a-zA-Z$]+\)?\+'(S{4}|S{7})'\);}\(_?[0-9a-zA-Z$]+\);}\('S{6}'\)\('S{2}'\)\);;}}|if\(typeof _?[0-9a-zA-Z$]+==='S{6}'\)\{return function\(_?[0-9a-zA-Z$]+\)\{}\['S{11}']\('S{9}'\)\['S{5}']\('S{7}'\);}else\{if\(\(?\(''\+\(?_?[0-9a-zA-Z$]+\/_?[0-9a-zA-Z$]+\)?\)\['S{6}']!==0x1\)?\|\|\(?\(?_?[0-9a-zA-Z$]+%0x14\)?===0x0\)?\)\{\(function\(\)\{return true;}\['S{11}']\('S{4}'\+'S{4}'\)\['S{4}']\('S{6}'\)\);}else\{\(function\(\)\{return false;}\['S{11}']\('S{4}'\+'S{4}'\)\['S{5}']\('S{11}'\)\);}})_?[0-9a-zA-Z$]+\(\+\+_?[0-9a-zA-Z$]+\);}try\{if\(_?[0-9a-zA-Z$]+\)\{return _?[0-9a-zA-Z$]+;}else\{_?[0-9a-zA-Z$]+\(0x0\);}}catch\(_?[0-9a-zA-Z$]+\)\{}};$/.test(transRes.slice(startPos, endPos))) {
+		if (/^function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\)\{function _?[0-9a-zA-Z$]+\(_?[0-9a-zA-Z$]+\)\{(?:var _?[0-9a-zA-Z$]+='(?:S{2})?';if\(\(?typeof _?[0-9a-zA-Z$]+==='S{6}'\)?&&\(?_?[0-9a-zA-Z$]+==='(?:S{2})?'\)?\)\{var _?[0-9a-zA-Z$]+=function\(\)\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'(?:S{23}|S{26})'\+_?[0-9a-zA-Z$]+\)?\+'(?:S{4}|S{7})'\);}\(_?[0-9a-zA-Z$]+\);}\('S{6}'\)\('S{2}'\)\);};return _?[0-9a-zA-Z$]+\(\);}else\{if\(\(?\(''\+\(?_?[0-9a-zA-Z$]+\/_?[0-9a-zA-Z$]+\)?\)\['S{6}']!==0x1\)?\|\|\(?\(?_?[0-9a-zA-Z$]+%0x14\)?===0x0\)?\)\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'(?:S{23}|S{26})'\+_?[0-9a-zA-Z$]+\)?\+'(?:S{4}|S{7})'\);}\(_?[0-9a-zA-Z$]+\);}\('S{6}'\)\('S{2}'\)\);;}else\{\(function\(_?[0-9a-zA-Z$]+\)\{return function\(_?[0-9a-zA-Z$]+\)\{return Function\(\(?'(?:S{23}|S{26})'\+_?[0-9a-zA-Z$]+\)?\+'(?:S{4}|S{7})'\);}\(_?[0-9a-zA-Z$]+\);}\('S{6}'\)\('S{2}'\)\);;}}|if\(typeof _?[0-9a-zA-Z$]+==='S{6}'\)\{return function\(_?[0-9a-zA-Z$]+\)\{}\['S{11}']\('S{9}'\)\['S{5}']\('S{7}'\);}else\{if\(\(?\(''\+\(?_?[0-9a-zA-Z$]+\/_?[0-9a-zA-Z$]+\)?\)\['S{6}']!==0x1\)?\|\|\(?\(?_?[0-9a-zA-Z$]+%0x14\)?===0x0\)?\)\{\(function\(\)\{return true;}\['S{11}']\('S{4}'\+'S{4}'\)\['S{4}']\('S{6}'\)\);}else\{\(function\(\)\{return false;}\['S{11}']\('S{4}'\+'S{4}'\)\['S{5}']\('S{11}'\)\);}})_?[0-9a-zA-Z$]+\(\+\+_?[0-9a-zA-Z$]+\);}try\{if\(_?[0-9a-zA-Z$]+\)\{return _?[0-9a-zA-Z$]+;}else\{_?[0-9a-zA-Z$]+\(0x0\);}}catch\(_?[0-9a-zA-Z$]+\)\{}};$/.test(transRes.slice(startPos, endPos))) {
 			jsStr = jsStr.replaceWithStr(startPos, endPos, "");
 			transRes = transRes.replaceWithStr(startPos, endPos, "");
 			preSearchRegexp2.lastIndex = startPos;
@@ -1420,7 +1420,7 @@ function decryptFormat(globalJsArr) {
 			let hexNumberPos = Number.POSITIVE_INFINITY;
 			while ((hexNumberPos = transStrRes.lastSearchOf(/0x[0-9a-fA-F]*/, hexNumberPos - 1)) !== -1) {
 				logger.weakUpdate();
-				let activeNumStr = transStrRes.slice(hexNumberPos).match(/0x([0-9a-fA-F])*/)[0];
+				let activeNumStr = transStrRes.slice(hexNumberPos).match(/0x[0-9a-fA-F]*/)[0];
 				// ^~是位运算符，此处排除
 				let checkNumberRegexp = /[{}\[\]().,+\-*\/!<>%=&|?:; ]/;
 				if (
@@ -1442,7 +1442,7 @@ function decryptFormat(globalJsArr) {
 			let objIndexerPos = Number.POSITIVE_INFINITY;
 			while ((objIndexerPos = transStrRes.lastSearchOf(/\['S*.']/, objIndexerPos - 1)) !== -1) {
 				logger.weakUpdate();
-				let activeIndexerStr = transStrRes.slice(objIndexerPos).match(/\['(S)*.']/)[0];
+				let activeIndexerStr = transStrRes.slice(objIndexerPos).match(/\['S*.']/)[0];
 				let leftSplitter, rightSplitter;
 
 				let isAheadRegexp = (() => {
@@ -1453,7 +1453,7 @@ function decryptFormat(globalJsArr) {
 					if (lastRegExpPos === -1) {
 						return false;
 					} else {
-						let activeRegExpStr = transStrRes.slice(lastRegExpPos).match(/\/(S)*\//)[0];
+						let activeRegExpStr = transStrRes.slice(lastRegExpPos).match(/\/S*\//)[0];
 						return lastRegExpPos + activeRegExpStr.length === objIndexerPos;
 					}
 				})();
@@ -1494,7 +1494,7 @@ function decryptFormat(globalJsArr) {
 							leftSplitter = "";
 							// console.log("× E", objIndexerPos, activeIndexerStr);
 						} else {
-							let activeRegExpStr = transStrRes.slice(lastRegExpPos).match(/\/(S)*\//)[0];
+							let activeRegExpStr = transStrRes.slice(lastRegExpPos).match(/\/S*\//)[0];
 							if (lastRegExpPos + activeRegExpStr.length === objIndexerPos) {
 								leftSplitter = ".";
 								// console.log("√ E", objIndexerPos, activeIndexerStr);
@@ -1567,7 +1567,7 @@ function findAndFormatCodeBlock(jsStr, needSplit = true, isRoot = true) {
 			case "SWITCH_CASE":
 				for (let index = 0; index < splitStatementsRes.length; index++) {
 					let jsStr = splitStatementsRes[index];
-					if (/^(case[!"'(+\-.\[{~ ]|default:)/.test(jsStr)) {
+					if (/^(?:case[!"'(+\-.\[{~ ]|default:)/.test(jsStr)) {
 						if (splitStatementsRes[index + 1]?.[0] === '{') {
 							jsStr += '{';
 							splitStatementsRes[index + 1] = splitStatementsRes[index + 1].slice(2, -2).replace(/(\t*)\t/g, "$1");
