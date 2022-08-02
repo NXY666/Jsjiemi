@@ -350,21 +350,21 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 1. 运行 `npm install` 。（可选，安装依赖后解密更安全）
 2. 根据需求在 [`config.json`](/config.json) 中自定义配置。
-3. 运行 [`Decryptor.js`](/Decryptor.js) 。
+3. 运行 [`node Decryptor.js 要解密的文件.js`](/Decryptor.js) 。
 
 ## 输出结果
 
-> 每一解密步骤完成后，解密器都会输出一个**结果文件**。
+> 每一解密步骤完成后，解密器都会在**原文件目录**输出一个**结果文件**。
 
 > 你可以根据你的**需求**从以下版本中选择一个作为最终解密结果。
 
-* DecryptResult0.js：净化代码
-* DecryptResult1.js：解除全局加密
-* DecryptResult2.js：解除代码块加密
-* DecryptResult3.js：清理死代码（花指令）
-* DecryptResult4.js：解除环境限制
-* DecryptResult5.js：提升代码可读性
-* DecryptResult6.js：格式化代码
+* 原文件名.decrypt.0.js：净化代码
+* 原文件名.decrypt.1.js：解除全局加密
+* 原文件名.decrypt.2.js：解除代码块加密
+* 原文件名.decrypt.3.js：清理死代码（花指令）
+* 原文件名.decrypt.4.js：解除环境限制
+* 原文件名.decrypt.5.js：提升代码可读性
+* 原文件名.decrypt.6.js：格式化代码
 
 ## 提交问题
 

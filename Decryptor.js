@@ -683,9 +683,12 @@ let START_TIMESTAMP = Date.now(), PAUSE_TIME = 0;
 // 初始化日志工具并确认文件路径
 let logger = new Logger(config["logger"]);
 logger.logWithoutProgress("----====* JsjiamiV6 Decryptor *====----");
-let absolutePathStr = Path.resolve(config.target);
+let targetFile = (process.argv[2] !== undefined) ? process.argv[2] : config.target;
+let absolutePathStr = Path.resolve(targetFile);
+let absoluteDirStr = Path.dirname(absolutePathStr);
+let fileBaseName = Path.basename(targetFile, Path.extname(targetFile));
 logger.logWithoutProgress(`解密文件：${absolutePathStr}`);
-logger.logWithoutProgress(`输出目录：${Path.resolve("./")}`);
+logger.logWithoutProgress(`输出目录：${absoluteDirStr}`);
 logger.logWithoutProgress(`模拟模块：${vm2 ? "vm2" : "vm (不安全)"}`);
 if (!vm2) {
 	console.warn("【安全建议】当前未安装 vm2 模块，该模块支持相对安全地执行 JavaScript 代码。在安装 vm2 模块之前，解密器将使用 Node.js 内建的 vm 模块。因此，请尽量避免解密不可信的 JavaScript 文件。");
@@ -744,7 +747,7 @@ function compressionCode(jsStr) {
 	return jsStr;
 }
 js = compressionCode(js);
-fs.writeFileSync("DecryptResult0.js", js);
+fs.writeFileSync(absoluteDirStr + "/" + fileBaseName + ".decrypt.0.js", js);
 
 logger.logWithoutDetermine("解除全局加密");
 const STATEMENTS_TYPE_SCHEMAS = {
@@ -1038,7 +1041,7 @@ function decryptGlobalJs(js) {
 	});
 }
 jsStatementsArr = decryptGlobalJs(js);
-fs.writeFileSync("DecryptResult1.js", jsStatementsArr.join("\n"));
+fs.writeFileSync(absoluteDirStr + "/" + fileBaseName + ".decrypt.1.js", jsStatementsArr.join("\n"));
 
 logger.logWithoutProgress("解除代码块加密");
 /**
@@ -1228,7 +1231,7 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 	return findAndDecryptCodeBlock(jsArr, isShowProgress);
 }
 jsStatementsArr = decryptCodeBlockArr(jsStatementsArr, true);
-fs.writeFileSync("DecryptResult2.js", jsStatementsArr.join("\n"));
+fs.writeFileSync(absoluteDirStr + "/" + fileBaseName + ".decrypt.2.js", jsStatementsArr.join("\n"));
 
 logger.logWithoutProgress("清理死代码（花指令）");
 function simplifyIf(ifJsStr) {
@@ -1351,7 +1354,7 @@ function clearDeadCodes(jsArr, isShowProgress) {
 	return findAndClearDeadCodes(jsArr, isShowProgress);
 }
 jsStatementsArr = clearDeadCodes(jsStatementsArr, true);
-fs.writeFileSync("DecryptResult3.js", jsStatementsArr.join("\n"));
+fs.writeFileSync(absoluteDirStr + "/" + fileBaseName + ".decrypt.3.js", jsStatementsArr.join("\n"));
 
 logger.logWithoutDetermine("解除环境限制");
 function clearEnvironmentLimit(jsArr) {
@@ -1392,7 +1395,7 @@ function clearEnvironmentLimit(jsArr) {
 	});
 }
 jsStatementsArr = clearEnvironmentLimit(jsStatementsArr, true);
-fs.writeFileSync("DecryptResult4.js", jsStatementsArr.join("\n"));
+fs.writeFileSync(absoluteDirStr + "/" + fileBaseName + ".decrypt.4.js", jsStatementsArr.join("\n"));
 
 logger.logWithoutDetermine("提升代码可读性");
 function decodeStr(txt) {
@@ -1531,7 +1534,7 @@ function decryptFormat(globalJsArr) {
 	});
 }
 jsStatementsArr = decryptFormat(jsStatementsArr);
-fs.writeFileSync("DecryptResult5.js", jsStatementsArr.join("\n"));
+fs.writeFileSync(absoluteDirStr + "/" + fileBaseName + ".decrypt.5.js", jsStatementsArr.join("\n"));
 
 logger.logWithoutProgress("格式化代码");
 function findAndFormatCodeBlock(jsStr, needSplit = true, isRoot = true) {
@@ -1585,7 +1588,7 @@ function findAndFormatCodeBlock(jsStr, needSplit = true, isRoot = true) {
 	return jsStr;
 }
 jsStatementsArr = findAndFormatCodeBlock(jsStatementsArr);
-fs.writeFileSync("DecryptResult6.js", jsStatementsArr.join("\n"));
+fs.writeFileSync(absoluteDirStr + "/" + fileBaseName + ".decrypt.6.js", jsStatementsArr.join("\n"));
 
 const END_TIMESTAMP = Date.now();
 
