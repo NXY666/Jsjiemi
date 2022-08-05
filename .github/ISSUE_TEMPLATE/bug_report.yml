@@ -1,10 +1,10 @@
-name: BUG反馈
-description: 反馈使用解密器的过程中遇到的错误和漏洞。
+name: BUG提交
+description: 全局解密函数识别异常、解密过程报错、解密结果有误等问题在此反馈。
 labels:
   - BUG
 body:
   - type: dropdown
-    id: OperatingSystem
+    id: OS_dropdown
     attributes:
       label: 操作系统
       description: 系统的差异可能导致兼容性问题，因此需要你提供遇到问题时使用的操作系统。
@@ -16,17 +16,23 @@ body:
         - 其它
     validations:
       required: true
+  - type: input
+    id: NodeVersion_input
+    attributes:
+      label: Node.js 版本号
+      description: "解密器在发布前只使用最新LTS版本进行测试。如果你使用的并非最新版本，请在命令行中运行`node -v`获取正在使用的版本号。"
+      placeholder: "最新版本"
   - type: textarea
-    id: Details
+    id: Details_textarea
     attributes:
       label: 问题详情
     validations:
       required: true
   - type: textarea
-    id: Code
+    id: Code_textarea
     attributes:
       label: 目标代码
-      description: 不同的目标代码可能产生不同的解密效果。你可以`填写链接`或`粘贴代码`。
+      description: 不同的目标代码可能产生不同的解密效果。你可以 `填写链接` 或 `粘贴代码` 。
       render: JavaScript
     validations:
       required: true
