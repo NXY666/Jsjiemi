@@ -1,6 +1,6 @@
 {
 	"name": "jsjiami-v6-decryptor",
-	"version": "2.8.1",
+	"version": "2.9.0",
 	"description": "A decryptor for JsjiamiV6.",
 	"keywords": ["javascript", "decryptor", "jsjiami", "v6"],
 	"homepage": "https://github.com/NXY666/JsjiamiV6-Decryptor",
@@ -10,6 +10,10 @@
 	"license": "AGPL-3.0",
 	"author": "NXY666",
 	"main": "Decryptor.js",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/NXY666/JsjiamiV6-Decryptor.git"
+	},
 	"optionalDependencies": {
 		"vm2": "^3.9.10"
 	},

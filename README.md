@@ -4,12 +4,13 @@
 * **完全** 使用 `NodeJs` 开发。
 * **无需** 依赖第三方模块。
 
-## 仓库地址
+## 远程仓库
 
-> Gitee 仓库为 Github 的同步仓库，更新可能会有延迟。
+> 仓库总是由 [![GitHub](https://img.shields.io/badge/GitHub-181717?style=plastic&logo=Github)](https://github.com/)
+> 同步至 [![Gitee](https://img.shields.io/badge/Gitee-C71D23?style=plastic&logo=Gitee)](https://gitee.com/) ，同步可能会有延迟。
 
-* Github 仓库：https://github.com/NXY666/JsjiamiV6-Decryptor.git
-* Gitee 仓库：https://gitee.com/NXY666/JsjiamiV6-Decryptor.git
+[![JsjiamiV6-Decryptor - GitHub](https://img.shields.io/badge/GitHub-JsjiamiV6--Decryptor-white?logo=Github&labelColor=181717)](https://github.com/NXY666/JsjiamiV6-Decryptor.git)<br>
+[![JsjiamiV6-Decryptor - Gitee](https://img.shields.io/badge/Gitee-JsjiamiV6--Decryptor-white?logo=Gitee&labelColor=C71D23)](https://gitee.com/NXY666/JsjiamiV6-Decryptor.git)
 
 ## 解密效果
 
@@ -318,7 +319,7 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 ## 功能介绍
 
 * 解除全局加密
-    * 还原类似 `_0x51f5('7', 'Ik*@')` 的加密内容。
+  * 还原类似 `_0x51f5('7', 'Ik*@')` 的加密内容。
 * 解除代码块加密
   * 还原代码块中被统一收集的字符串及运算符。
 * 清理死代码（花指令）
@@ -328,6 +329,7 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
   1. 解除 `禁止控制台调试` 限制。
   2. 解除 `禁止控制台输出` 限制。
   3. 解除 `防止格式化` 限制。
+  4. 解除 `安全域名` 限制。
 * 提升代码可读性
   1. 合并串联字符串（`'spl'+'it'` → `'split'`）
   2. 转换十六进制数字（`0xf` → `15`）
@@ -366,16 +368,16 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 * DecryptResult5.js：提升代码可读性
 * DecryptResult6.js：格式化代码
 
-## 提交问题
+## 问题反馈
 
-* 如果该 JS **使用了(我)不常用的语法**，可能导致解密失败。如遇到此类情况欢迎提交 Issue 。
-* 目前仅支持通过 Github 提交 Issue ， Gitee 仓库已关闭 Issue 功能。
+* 如果目标 JS **使用了(我)不常用的语法**，可能导致解密失败。如遇到此类情况欢迎提交 `Issue` 。
+* 为防止议题分散不便管理，仅支持通过 [![GitHub](https://img.shields.io/badge/GitHub-181717?style=plastic&logo=Github)](https://github.com/) 提交 `Issue` 。
+* 鉴于强迫症等一些特殊原因，本仓库几乎不接受 `Pull Request` ，如有建议可通过 `Issue` 提交。
 
 ## 开发计划
 
-> 总算肝完了，继续玩 `Minecraft Dungeons` 去了😀
+- [ ] 问题：对象中包含三目运算导致识别为代码块的问题
 
-- [ ] 摆烂：...
-- [x] 新增：支持移除禁用控制台等限制功能
-- [x] 问题：case语句解析只识别第一个case，后续case不能解析
-- [x] 问题：不兼容生成器和yield关键字
+## 特别感谢
+
+[![Licenses for Open Source Development](https://img.shields.io/badge/JetBrains-Open%20Source%20License-white?logo=JetBrains&style=plastic)](https://www.jetbrains.com/community/opensource/#support)
