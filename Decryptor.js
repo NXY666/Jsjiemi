@@ -1,7 +1,7 @@
 /**
  * JS解密工具
  * @author NXY666
- * @version 2.12.0
+ * @version 2.12.1
  */
 const fs = require("fs");
 const readline = require("readline");
@@ -355,9 +355,10 @@ function transStr(jsStr) {
 	let signStack = [], jsArr = jsStr.split("");
 	let signStartPosStack = [], lastQuoteStartPos = -1;
 	for (let nowPos = 0; nowPos < jsArr.length; nowPos++) {
+		const stackTop = signStack.top();
 		switch (jsArr[nowPos]) {
 			case '/':
-				if (signStack.top() === jsArr[nowPos]) {
+				if (stackTop === jsArr[nowPos]) {
 					// 结束正则
 					signStack.pop();
 					lastQuoteStartPos = signStartPosStack.pop();
@@ -399,7 +400,7 @@ function transStr(jsStr) {
 			case '"':
 			case "'":
 			case '`':
-				if (signStack.top() === jsArr[nowPos]) {
+				if (stackTop === jsArr[nowPos]) {
 					// 结束字符串
 					signStack.pop();
 					lastQuoteStartPos = signStartPosStack.pop();
@@ -412,14 +413,14 @@ function transStr(jsStr) {
 				}
 				break;
 			case '\\':
-				if (signStack.top() === '"' || signStack.top() === "'" || signStack.top() === '/' || signStack.top() === '`') {
+				if (stackTop === '"' || stackTop === "'" || stackTop === '/' || stackTop === '`') {
 					jsArr[nowPos++] = 'S';
 				}
 				break;
 			default:
 				break;
 		}
-		if (signStack.top() === '"' || signStack.top() === "'" || signStack.top() === '/' || signStack.top() === '`') {
+		if (stackTop === '"' || stackTop === "'" || stackTop === '/' || stackTop === '`') {
 			jsArr[nowPos] = 'S';
 		}
 	}
@@ -539,11 +540,40 @@ function getQuoteEndPos(jsStr, startPos) {
 function splitStatements(jsStr, statementType) {
 	let transLayerRes = transLayer(jsStr), splitJsArr = [];
 	if (statementType === undefined) {
-		let tmpStr = transLayerRes.replace(/[0-9a-zA-Z]+/g, "W");
-		if (tmpStr === "" || tmpStr === ";") {
+		let thumbStr = transLayerRes.replace(/[0-9a-zA-Z]+/g, "W");
+		if (thumbStr === "" || thumbStr === ";") {
 			// 空
 			statementType = "EMPTY";
-		} else if (/^(?:[^,:;]+:[^,:;]+,)*[^,:;]+:[^,:;]+$/.test(tmpStr)) {
+		} else if ((thumbStr => {
+			let objectValue = 0, questionMarkValue = 0;
+			for (let i = 0; i < thumbStr.length; i++) {
+				if (thumbStr[i] === ';') {
+					return false;
+				} else if (thumbStr[i] === ':') {
+					if (questionMarkValue > 0) {
+						questionMarkValue--;
+					} else {
+						objectValue++;
+					}
+				} else if (thumbStr[i] === '?') {
+					if (!/[.?]/.test(thumbStr[i + 1]) && thumbStr[i - 1] !== '?') {
+						questionMarkValue++;
+					}
+				} else if (thumbStr[i] === ',') {
+					if (questionMarkValue > 0) {
+						return false;
+					} else {
+						objectValue--;
+					}
+				}
+				if (objectValue > 1) {
+					return false;
+				} else if (objectValue < 0) {
+					objectValue = 0;
+				}
+			}
+			return true;
+		})(thumbStr)) {
 			// 对象
 			statementType = "OBJECT";
 		} else if (/^(?:case[!"%&'(*+,\-.\/:;<=>?@\[^{|~ ]|default:)/.test(transLayerRes.slice(0, 8))) {
@@ -688,12 +718,60 @@ function virtualGlobalEval(jsStr) {
 	return vm2 ? vm2.run(String(jsStr)) : vm.runInContext(jsStr, globalContext);
 }
 
+function deepMergeObject(def, act) {
+	if (typeof def == "undefined" || def == null) {
+		return act;
+	} else if (typeof act == "undefined" || act == null) {
+		return def;
+	}
+
+	if (typeof def !== "object" || typeof act !== "object") {
+		return typeof def !== typeof act ? def : act;
+	} else if (Array.isArray(def) !== Array.isArray(act)) {
+		return def;
+	} else if (Array.isArray(def) && Array.isArray(act)) {
+		return def.concat(act);
+	}
+
+	let res = {};
+	for (let k in def) {
+		res[k] = deepMergeObject(def[k], act[k]);
+	}
+	for (let k in act) {
+		res[k] = deepMergeObject(def[k], act[k]);
+	}
+	return res;
+}
+const defaultConfig = {
+	"target": "./target.js",
+	"quietMode": false,
+	"logger": {
+		"content": {
+			"linePrefix": {
+				"first": "* ",
+				"others": "· "
+			}
+		},
+		"progress": {
+			"length": 50,
+			"frequency": 100,
+			"emptyStr": " ",
+			"fullStr": "="
+		}
+	},
+	"optionalFunction": {
+		"MergeString": true,
+		"ConvertHex": true,
+		"ReplaceIndexer": true,
+		"ConvertUnicode": true
+	}
+};
 let config;
 try {
-	config = JSON5.parse(fs.readFileSync("config.json").toString());
+	config = deepMergeObject(defaultConfig, JSON5.parse(fs.readFileSync("config.json").toString()));
 } catch (e) {
 	console.error(e);
-	throw Error(`未找到配置文件（config.json），请确认该文件是否存在于当前目录。`);
+	throw Error(`无法读取配置文件，请确认 ${Path.resolve("config.json")} 是否存在且有足够的访问权限。`);
 }
 
 // 开始计时
