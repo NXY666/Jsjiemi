@@ -358,15 +358,17 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 > 每一解密步骤完成后，解密器都会输出一个**结果文件**。
 
-> 你可以根据你的**需求**从以下版本中选择一个作为最终解密结果。
+> 你可以根据你的**需求**从以下结果中选择一个作为最终解密结果。
 
-* DecryptResult0.js：净化代码
-* DecryptResult1.js：解除全局加密
-* DecryptResult2.js：解除代码块加密
-* DecryptResult3.js：清理死代码（花指令）
-* DecryptResult4.js：解除环境限制
-* DecryptResult5.js：提升代码可读性
-* DecryptResult6.js：格式化代码
+> 支持通过配置文件修改输出文件的位置和命名格式。 
+
+* `DecryptResult0.js`：净化代码
+* `DecryptResult1.js`：解除全局加密
+* `DecryptResult2.js`：解除代码块加密
+* `DecryptResult3.js`：清理死代码（花指令）
+* `DecryptResult4.js`：解除环境限制
+* `DecryptResult5.js`：提升代码可读性
+* `DecryptResult6.js`：格式化代码
 
 ## 问题反馈
 
@@ -378,8 +380,7 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 > 最近在做项目，特别忙，实在是没时间写QwQ
 
-- [x] 问题：对象中包含三目运算导致识别为代码块的问题
-- [ ] 优化：文件读取与输出流程以及新增更多可配置选项
+- [x] 优化：文件读取与输出流程以及新增更多可配置选项
 
 ## 特别感谢
 
