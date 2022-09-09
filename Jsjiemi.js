@@ -1,7 +1,7 @@
 /**
- * JS解密工具
+ * Jsjiemi
  * @author NXY666
- * @version 2.12.2
+ * @version 2.13.0
  */
 const fs = require("fs");
 const readline = require("readline");
@@ -511,10 +511,7 @@ function transLayer(jsStr, layer, hasTrans) {
 function escapeEvalStr(str) {
 	return "'" + JSON.stringify(str).slice(1, -1).replace(/'/g, "\\'").replace(/\\"/g, '"') + "'";
 }
-function getQuoteEndPos(jsStr, startPos) {
-	if (startPos === undefined) {
-		startPos = 0;
-	}
+function getQuoteEndPos(jsStr, startPos = 0) {
 	jsStr = transStr(jsStr);
 
 	let signStack = [], jsArr = jsStr.split("");
@@ -772,7 +769,7 @@ function outputFile(content, step) {
 
 const defaultConfig = {
 	"target": "./target.js",
-	"output": "./DecryptResult{:N}.js",
+	"output": "./JsjiemiResult{:N}.js",
 	"quietMode": false,
 	"logger": {
 		"content": {
@@ -1236,42 +1233,190 @@ function getCodeBlockDecryptorName(jsStr) {
 		return false;
 	}
 }
-/**
- * 替换代码块中使用加密对象方法加密的内容
- * @param callObjName {string} 所在代码块的加密对象名称
- * @param callFuncName {string} 调用加密对象的方法名称
- * @param callStr {string} 调用加密对象方法的原文
- * @param ignoreQuoteOutside {boolean} 解密完成后是否不使用圆括号包装结果
- * @returns {string} 解密结果
- */
-function replaceDecryptorFunc(callObjName, callFuncName, callStr, ignoreQuoteOutside) {
-	// 获取加密对象内函数的参数列表
-	let callFunc = virtualEval(callObjName + "['" + callFuncName + "']");
-	let funcStr = callFunc.toString(), transFuncStr = transStr(funcStr);
-	let funcParams = funcStr.slice(transFuncStr.indexOf("(") + 1, transFuncStr.indexOf(")")).splitByOtherStr(transFuncStr.slice(transFuncStr.indexOf("(") + 1, transFuncStr.indexOf(")")), ",");
 
-	// 获取调用解密函数的参数列表
-	let transCallStr = transStr(callStr);
-	let transCallLayer = transLayer(transCallStr, 1, true), transCallLayer2 = transLayer(transCallStr, 2, true);
-	let callParamsStr = callStr.slice(transCallLayer.indexOf("(") + 1, transCallLayer.indexOf(")"));
-	let callParams = callParamsStr.splitByOtherStr(transCallLayer2.slice(transCallLayer.indexOf("(") + 1, transCallLayer.indexOf(")")), ",");
-	if (funcParams.length !== callParams.length) {
-		throw Error(`加密对象函数调用参数数量(${callParams.length})与实际(${funcParams})不符。`);
+function splitExp(exp) {
+	let transExpLayer = transLayer(exp);
+	let resArr = [], isSign = false;
+	resArr.push([]);
+	for (let i = 0; i < transExpLayer.length; i++) {
+		let c = exp[i], tc = transExpLayer[i], topResArr = resArr.top();
+		const nowIsSign = tc === ' ' ? null : /[!%&*+,\-:;<=>?^|~/.]/.test(tc);
+		if (isSign !== nowIsSign) {
+			if (!isSign) {
+				resArr[resArr.length - 1] = topResArr.join("");
+			} else {
+				resArr.push(...splitSign(resArr.pop().join("")));
+			}
+			isSign = nowIsSign;
+			resArr.push([c]);
+		} else {
+			topResArr.push(c);
+		}
 	}
-	let funcResStr = funcStr.slice(transFuncStr.indexOf("{return ") + 8, transFuncStr.lastIndexOf(";}")),
-		replacePos = 0;
-	funcParams.forEach(function (param, index) {
-		replacePos = transStr(funcResStr).replace(/SQ/g, " ").indexOf(param, replacePos);
-		funcResStr = funcResStr.slice(0, replacePos) + funcResStr.slice(replacePos).replace(param, callParams[index].replace(/\$/g, "$$$$"));
-		replacePos = replacePos + callParams[index].length;
+	resArr[resArr.length - 1] = resArr.top().join("");
+	resArr.forEach((v, i) => {
+		if (v === " ") {
+			if (getSignPriority(resArr[i - 1]) !== 0) {
+				resArr[i - 1] += " ";
+			} else if (getSignPriority(resArr[i + 1]) !== 0) {
+				resArr[i + 1] = " " + resArr[i + 1];
+			}
+		}
 	});
-
-	if ((funcParams.length === 2 && !transFuncStr.endsWith(");}")) && !ignoreQuoteOutside) {
-		return "(" + funcResStr + ")";
+	return resArr.filter(v => v !== " ");
+}
+function splitSign(signs) {
+	if (Array.isArray(signs)) {
+		if (!signs.result) {
+			signs.result = [];
+		}
+		while (signs[0].length) {
+			if (getSignPriority(signs[0]) === 0) {
+				signs[1] = signs[0].slice(-1) + signs[1];
+				signs[0] = signs[0].slice(0, -1);
+			} else {
+				signs.result.push(signs.shift());
+				signs[1] = "";
+			}
+		}
+		return signs.result;
 	} else {
-		return funcResStr;
+		return getSignPriority(signs) === 0 ? splitSign([signs.slice(0, -1), signs.slice(-1)]) : [signs];
 	}
 }
+function getSignPriority(sign) {
+	switch (sign?.trim()) {
+		case "[":
+		case ".":
+		case "?.":
+			return 18;
+		case "new":
+			return 17;
+		case "++":
+		case "--":
+			return 16;
+		case "!":
+		case "~":
+		case "typeof":
+		case "void":
+		case "delete":
+		case "await":
+			return 15;
+		case "**":
+			return 14;
+		case "*":
+		case "/":
+		case "%":
+			return 13;
+		case "+":
+		case "-":
+			return 12;
+		case "<<":
+		case ">>":
+		case ">>>":
+			return 11;
+		case "<":
+		case "<=":
+		case ">":
+		case ">=":
+		case "in":
+		case "instanceof":
+			return 10;
+		case "==":
+		case "!=":
+		case "===":
+		case "!==":
+			return 9;
+		case "&":
+			return 8;
+		case "^":
+			return 7;
+		case "|":
+			return 6;
+		case "&&":
+			return 5;
+		case "||":
+		case "??":
+			return 4;
+		case "?":
+		case ":":
+			return 3;
+		case "=":
+		case "+=":
+		case "-=":
+		case "**=":
+		case "*=":
+		case "/=":
+		case "%=":
+		case "<<=":
+		case ">>=":
+		case ">>>=":
+		case "&=":
+		case "^=":
+		case "|=":
+		case "&&=":
+		case "||=":
+		case "??=":
+			return 2;
+		case ",":
+			return 1;
+		default:
+			return 0;
+	}
+}
+function needBracket(expPriList, leftSignPri = 0, rightSignPri = 0) {
+	expPriList = expPriList.filter(v => v);
+	let minPri = Math.min(...expPriList);
+	return expPriList.length > 0 && (leftSignPri >= minPri || rightSignPri > minPri);
+}
+function replaceDecObj(callStr, leftSignPri = 0, rightSignPri = 0) {
+	let transCallStr = transStr(callStr);
+	let transCallLayer = transLayer(transCallStr, 1, true), transCallLayer2 = transLayer(transCallStr, 2, true);
+	let memberRef = virtualGlobalEval(callStr.slice(0, transCallLayer.indexOf(']') + 1));
+	if (typeof memberRef == "function") {
+		// 获取调用解密函数的参数列表
+		let callObjName = callStr.slice(0, transCallLayer.indexOf('['));
+		let callParamStartPos = transCallLayer.indexOf("(") + 1,
+			callParamEndPos = transCallLayer.indexOf(")", callParamStartPos);
+		// 如果函数调用后面没有圆括号，则直接输出函数本体
+		if (callParamStartPos === 0 || callParamEndPos === -1) {
+			return memberRef.toString();
+		}
+		let callParamsStr = callStr.slice(callParamStartPos, callParamEndPos);
+		let callParamList = callParamsStr.splitByOtherStr(transCallLayer2.slice(callParamStartPos, callParamEndPos), ",");
+		// 获取解密函数的参数列表
+		let funcStr = memberRef.toString();
+		let funcParamList = funcStr.match(/function\s*\(([^)]*)\)/)[1].split(','),
+			funcBodyStr = funcStr.match(/\{return ?((?:.|\n)*?);?}/)?.[1];
+		let funcExpList = splitExp(funcBodyStr), funcExpPriList, returnList = [];
+		let ignoreBracket = false;
+		if (funcExpList.length === 1) {
+			funcExpList = funcExpList[0].match(/([^,()]+|\(|\)|,)/g);
+			ignoreBracket = true;
+		}
+		funcExpPriList = funcExpList.map(v => getSignPriority(v));
+		funcExpList.forEach((funcExpItem, funcExpIndex) => {
+			let funcParamIndex = funcParamList.indexOf(funcExpItem);
+			if (funcExpPriList[funcExpIndex] === 0 && funcParamIndex !== -1) {
+				let expItemList = splitExp(callParamList[funcParamIndex]),
+					expItemPriList = expItemList.map(v => getSignPriority(v));
+				returnList[funcExpIndex] = expItemList.map((item, index) => item.startsWith(callObjName) ? replaceDecObj(item, expItemPriList[index - 1] ?? funcExpPriList[funcParamIndex - 1], expItemPriList[index + 1] ?? funcExpPriList[funcParamIndex + 1]) : item).join("");
+				if (needBracket(expItemPriList, funcExpPriList[funcExpIndex - 1], funcExpPriList[funcExpIndex + 1])) {
+					returnList[funcExpIndex] = "(" + returnList[funcExpIndex] + ")";
+				}
+			} else {
+				returnList[funcExpIndex] = funcExpItem;
+			}
+		});
+		if (!ignoreBracket && needBracket(funcExpPriList, leftSignPri, rightSignPri)) {
+			return "(" + returnList.join("") + ")";
+		}
+		return returnList.join("");
+	} else {
+		return escapeEvalStr(memberRef);
+	}
+}
+
 function findAndDecryptCodeBlock(jsArr, isShowProgress) {
 	return jsArr.map(function (jsStr, progress) {
 		let transLayerRes = transLayer(jsStr);
@@ -1323,53 +1468,30 @@ function decryptCodeBlockArr(jsArr, isShowProgress) {
 	if (decryptorObjName) {
 		virtualGlobalEval(jsArr[0]);
 
-		let transStrRes;
-		// 识别是否添加括号（二叉树？不！它超出了我的能力范围。）
+		let transRes;
 		jsArr = jsArr.slice(1).map(function (jsStr) {
-			transStrRes = transStr(jsStr);
+			transRes = transStr(jsStr);
 
 			let decryptorPos = Number.POSITIVE_INFINITY;
-			while ((decryptorPos === Number.POSITIVE_INFINITY || decryptorPos - 1 >= 0) && (decryptorPos = transStrRes.lastSearchOf(new RegExp(decryptorObjName.replace(/\$/g, "\\$") + "\\['.+?']"), decryptorPos - 1)) !== -1) {
-				let leftSquarePos = transStrRes.indexOf("[", decryptorPos),
-					rightSquarePos = transStrRes.indexOf("]", decryptorPos);
-				switch (virtualEval("typeof " + decryptorObjName + jsStr.slice(leftSquarePos, rightSquarePos + 1))) {
-					case "string": {
-						jsStr = jsStr.replaceWithStr(decryptorPos, rightSquarePos + 1, escapeEvalStr(virtualEval(decryptorObjName + jsStr.slice(leftSquarePos, rightSquarePos + 1))));
-						break;
-					}
-					case "function": {
-						let transRes = transStr(jsStr);
-						let rightRoundPos = getQuoteEndPos(transRes, rightSquarePos + 1);
-
-						let jsStrBehind = transRes.slice(0, decryptorPos),
-							jsStrFront = transRes.slice(rightRoundPos + 1);
-						let ignoreQuoteOutside =
-							(
-								( // 所在的区域周围只有一个运算符
-									jsStrBehind.endsWith("return ") ||
-									jsStrBehind.endsWith(";") ||
-									jsStrBehind.endsWith("{")
-								) && (
-									jsStrFront.startsWith(";")
-								)
-							) || (
-								( // 逗号并列表示周围没有其它运算符
-									jsStrBehind.endsWith(",") ||
-									jsStrBehind.endsWith("(")
-								) && (
-									jsStrFront.startsWith(",") ||
-									jsStrFront.startsWith(")")
-								)
-							) || (
-								( // 所在的区域周围只有一个运算符
-									jsStrBehind.endsWith("[")
-								) && (
-									jsStrFront.startsWith("]")
-								)
-							);
-						jsStr = jsStr.replaceWithStr(decryptorPos, rightRoundPos + 1, replaceDecryptorFunc(decryptorObjName, jsStr.slice(leftSquarePos + 2, rightSquarePos - 1), jsStr.slice(decryptorPos, rightRoundPos + 1), ignoreQuoteOutside));
-						break;
-					}
+			while ((decryptorPos === Number.POSITIVE_INFINITY || decryptorPos - 1 >= 0) && (decryptorPos = transRes.lastSearchOf(new RegExp(decryptorObjName.replace(/\$/g, "\\$") + "\\['.+?']"), decryptorPos - 1)) !== -1) {
+				let leftSquarePos = transRes.indexOf("[", decryptorPos),
+					rightSquarePos = getQuoteEndPos(transRes, leftSquarePos);
+				if (transRes[rightSquarePos + 1] === "(") {
+					let leftRoundPos = transRes.indexOf("(", rightSquarePos),
+						rightRoundPos = getQuoteEndPos(transRes, leftRoundPos);
+					let jsStrBehind = transRes.slice(0, decryptorPos),
+						jsStrFront = transRes.slice(rightRoundPos + 1);
+					let replaceRes = replaceDecObj(
+						jsStr.slice(decryptorPos, rightRoundPos + 1),
+						getSignPriority(jsStrBehind.match(/[\s\S]*?(?<sign>[!%&*+,\-:;<=>?^|~/. ]*)$/).groups.sign),
+						getSignPriority(jsStrFront.match(/^(?<sign>[!%&*+,\-:;<=>?^|~/. \[]*)/).groups.sign)
+					);
+					jsStr = jsStr.replaceWithStr(decryptorPos, rightRoundPos + 1, replaceRes);
+					transRes = transRes.replaceWithStr(decryptorPos, rightRoundPos + 1, transStr(replaceRes));
+				} else {
+					let replaceRes = replaceDecObj(jsStr.slice(decryptorPos, rightSquarePos + 1));
+					jsStr = jsStr.replaceWithStr(decryptorPos, rightSquarePos + 1, replaceRes);
+					transRes = transRes.replaceWithStr(decryptorPos, rightSquarePos + 1, transStr(replaceRes));
 				}
 			}
 			return jsStr;

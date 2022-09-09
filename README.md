@@ -1,8 +1,8 @@
 # Jsjiemi
 
-* **简易** `JavaScript` 解密工具。
-* **完全** 使用 `NodeJs` 开发。
-* **无需** 依赖第三方模块。
+* **原创** `JavaScript` 解密工具。
+* **完全** 使用 `Node.js` 开发。
+* **可选** 第三方模块依赖。
 
 ## 远程仓库
 
@@ -341,10 +341,11 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 ## 使用须知
 
-* `JS最牛加密` 为加密器名称，并非浮夸的宣传标语。（😅）
-* 解密文件中**必须**有且仅有通过JS加密器加密的内容（支持经过格式化的代码）。
+* 本工具仅作学习交流使用，请务必遵守开源协议，不得用于非法或商业用途。（😅）
+* 解密文件中必须**有且仅有**通过某些**特定的**加密器加密的JavaScript代码（允许经过简单的格式化），解密前请将无关代码（如HTML的`<script>`标签或与加密脚本相关的非加密上下文）移除。
+* 某些特殊情况下，解密无法一次完成，可能需要使用不同的配置进行多次解密。
 * 注释和局部变量名在代码压缩、混淆的过程中已经丢失或被篡改，无法还原。
-* 在不安装依赖的情况下解密器将会使用 Node.js 内建的 vm 模块。若你无法安装依赖，请不要用于解密**不可信**的 JS 文件。
+* 在不安装依赖的情况下解密器将会使用 `Node.js` 内建的 `vm` 模块。**若你无法安装依赖，请不要用于解密不可信的 `JavaScript` 文件。**
 
 ## 使用方法
 
@@ -352,7 +353,7 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 1. 运行 `npm install` 。（可选，安装依赖后解密更安全）
 2. 根据需求在 [`config.json`](/config.json) 中自定义配置。
-3. 运行 [`Decryptor.js`](/Decryptor.js) 。
+3. 运行 [`Jsjiemi.js`](/Jsjiemi.js) 。
 
 ## 输出结果
 
@@ -362,13 +363,13 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 > 支持通过配置文件修改输出文件的位置和命名格式。 
 
-* `DecryptResult0.js`：净化代码
-* `DecryptResult1.js`：解除全局加密
-* `DecryptResult2.js`：解除代码块加密
-* `DecryptResult3.js`：清理死代码（花指令）
-* `DecryptResult4.js`：解除环境限制
-* `DecryptResult5.js`：提升代码可读性
-* `DecryptResult6.js`：格式化代码
+* `JsjiemiResult0.js`：净化代码
+* `JsjiemiResult1.js`：解除全局加密
+* `JsjiemiResult2.js`：解除代码块加密
+* `JsjiemiResult3.js`：清理死代码（花指令）
+* `JsjiemiResult4.js`：解除环境限制
+* `JsjiemiResult5.js`：提升代码可读性
+* `JsjiemiResult6.js`：格式化代码
 
 ## 问题反馈
 
@@ -378,9 +379,11 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 
 ## 开发计划
 
-> 最近在做项目，特别忙，实在是没时间写QwQ
+> 本来今天已经在修bug了，但是不幸的是手又发炎了，所以只能等我手好一点再说了😣
 
-- [x] 优化：文件读取与输出流程以及新增更多可配置选项
+* [ ] 支持类的识别和针对性格式化
+
+* [ ] 重写解密器识别功能，使其能够识别更多的加密方式。
 
 ## 特别感谢
 

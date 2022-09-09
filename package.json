@@ -1,6 +1,6 @@
 {
 	"name": "jsjiemi",
-	"version": "2.12.2",
+	"version": "2.13.0",
 	"description": "A decryptor for JavaScript.",
 	"keywords": ["javascript", "decryptor", "jsjiemi"],
 	"homepage": "https://github.com/NXY666/Jsjiemi",
@@ -9,15 +9,15 @@
 	},
 	"license": "AGPL-3.0",
 	"author": "NXY666",
-	"main": "Decryptor.js",
+	"main": "Jsjiemi.js",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/NXY666/Jsjiemi.git"
 	},
 	"optionalDependencies": {
-		"vm2": "^3.9.10"
+		"vm2": "^3.9.11"
 	},
 	"scripts": {
-		"decrypt": "node Decryptor.js"
+		"decrypt": "node Jsjiemi.js"
 	}
 }
