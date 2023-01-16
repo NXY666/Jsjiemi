@@ -1,7 +1,7 @@
 /**
  * Jsjiemi
  * @author NXY666
- * @version 2.14.0
+ * @version 2.14.1
  */
 const fs = require("fs");
 const readline = require("readline");
@@ -384,14 +384,13 @@ function pause(text) {
  * 代码分析工具
  * */
 function transStr(jsStr) {
-
 	let signStack = [], jsArr = jsStr.split("");
-	let signStartPosStack = [], lastQuoteStartPos = -1;
+	let signStartPosStack = [], lastQuoteStartPos = -1, inRegQuote = false;
 	for (let nowPos = 0; nowPos < jsArr.length; nowPos++) {
 		const stackTop = signStack.top();
 		switch (jsArr[nowPos]) {
 			case '/':
-				if (stackTop === jsArr[nowPos]) {
+				if (stackTop === jsArr[nowPos] && !inRegQuote) {
 					// 结束正则
 					signStack.pop();
 					lastQuoteStartPos = signStartPosStack.pop();
@@ -447,7 +446,26 @@ function transStr(jsStr) {
 				break;
 			case '\\':
 				if (stackTop === '"' || stackTop === "'" || stackTop === '/' || stackTop === '`') {
-					jsArr[nowPos++] = 'S';
+					if (jsArr[nowPos + 1] === 'u') {
+						jsArr.fill("S", nowPos, nowPos + 6);
+						nowPos += 5;
+					} else if (jsArr[nowPos + 1] === 'x') {
+						jsArr.fill("S", nowPos, nowPos + 4);
+						nowPos += 3;
+					} else {
+						jsArr.fill("S", nowPos, nowPos + 2);
+						nowPos++;
+					}
+				}
+				break;
+			case '[':
+				if (stackTop === '/') {
+					inRegQuote = true;
+				}
+				break;
+			case ']':
+				if (stackTop === '/') {
+					inRegQuote = false;
 				}
 				break;
 			default:
@@ -899,11 +917,12 @@ function compressionCode(jsStr) {
 		transRes.lastSearchOf(/\s/, spacePos - 1)
 	)) !== -1) {
 		logger.weakUpdate();
-		if (
-			(jsStr[spacePos - 1] == null || jsStr[spacePos - 1].match(/[{}\[\]().,+\-*\/~!%<>=&|^?:;@\s]/)) ||
-			(jsStr[spacePos + 1] == null || jsStr[spacePos + 1].match(/[{}\[\]().,+\-*\/~!%<>=&|^?:;@\s]/))
-		) {
+		const prevChar = transRes[spacePos - 1] ?? "", nextChar = transRes[spacePos + 1] ?? "",
+			concatChar = prevChar + nextChar;
+		if (/[{}\[\]().,+\-*\/~!%<>=&|^?:;@\s]/.test(concatChar) && (concatChar !== "++" && concatChar !== "--")) {
 			jsStr = jsStr.replaceWithStr(spacePos, spacePos + 1, "");
+		} else {
+			jsStr = jsStr.replaceWithStr(spacePos, spacePos + 1, " ");
 		}
 	}
 
@@ -1535,7 +1554,7 @@ outputFile(jsStatementsArr.join("\n"), 2);
 logger.logWithoutProgress("清理死代码（花指令）");
 function simplifyIf(ifJsStr) {
 	let conditionStartPos = 2, conditionEndPos = getQuoteEndPos(ifJsStr, conditionStartPos);
-	let ifRes = eval(ifJsStr.slice(conditionStartPos, conditionEndPos + 1));
+	let ifRes = virtualEval(ifJsStr.slice(conditionStartPos, conditionEndPos + 1));
 	let elsePos = getQuoteEndPos(ifJsStr, conditionEndPos + 1) + 1, endPos = getQuoteEndPos(ifJsStr, elsePos + 4);
 
 	return ifRes ? ifJsStr.slice(conditionEndPos + 2, elsePos - 1) : ifJsStr.slice(elsePos + 5, endPos);
@@ -1745,7 +1764,7 @@ outputFile(jsStatementsArr.join("\n"), 4);
 
 logger.logWithoutDetermine("提升代码可读性");
 function decodeStr(txt) {
-	return eval(`(\`${txt.replace(/`/g, "\\`")}\`)`).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n").replace(/\r/g, "\\r");
+	return virtualEval(`(\`${txt.replace(/`/g, "\\`")}\`)`).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n").replace(/\r/g, "\\r");
 }
 function decryptFormat(globalJsArr) {
 	return globalJsArr.map(function (statement) {
@@ -1818,7 +1837,7 @@ function decryptFormat(globalJsArr) {
 					}
 				})();
 				if (
-					new RegExp(`(?:^|[${BAD_VAR_CHARS}])(?:0|[1-9][0-9]*)?(?:(?![0-9])\\.[0-9]+|(?<=[0-9])\\.[0-9]*)?(?:e[+-]?[0-9]+)?$`).test(transStrRes.slice(0, objIndexerPos)) || // 123['toString']() -×-> 123.toString()
+					new RegExp(`(?:^|[${BAD_VAR_CHARS}])(?:0|[1-9][0-9]*(?:\\.[0-9]*)?|\\.[0-9]+)(?:e[+-]?[0-9]+)?$`).test(transStrRes.slice(0, objIndexerPos)) || // 123['toString']() -×-> 123.toString()
 					transStrRes[objIndexerPos - 1].match(/[{}\[(,+\-*~!%<>=&|^?:;@]/) || // [['t']] -×-> [.t] （此时是字符串数组）
 					transStrRes[objIndexerPos + activeIndexerStr.length].match(/[`'"]/) || // ['t']"a" -×-> t."a" （忘了为什么了）
 					!isAheadRegexp && transStrRes[objIndexerPos - 1] === '/' || // 1 / ['t'] -×-> 1 /.t （此时是字符串数组）
