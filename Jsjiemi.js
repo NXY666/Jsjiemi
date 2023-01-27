@@ -1,7 +1,9 @@
 /**
  * Jsjiemi
  * @author NXY666
- * @version 2.14.1
+ * @version 2.14.2
+ * @description `JavaScript` 解密工具。请务必遵守**开源协议**，不得用于**非法**或**商业用途**。
+ * @license GPL-3.0
  */
 const fs = require("fs");
 const readline = require("readline");
@@ -649,14 +651,69 @@ function splitStatements(jsStr, statementType) {
 				let partJsStr = jsStr.slice(startPos, endPos + 1),
 					transPartJsStr = transLayerRes.slice(startPos, endPos + 1);
 				function matchStatement() {
-					let matchRes =
-						transLayerRes.slice(startPos).match(/^(?:yiled )?(?:await )?if\(Q+\){?.*?(?:};|;|})(?:else if\(Q+\){?.*?(};|;|}))*(?:else{?.*?(};|;|}))?/) || // if...else
-						transPartJsStr.match(/^(?:yiled )?(?:await )?(?:async )?function\*? [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
-						transPartJsStr.match(/^(?:yiled )?(?:await )?(?:for|while|with)\(Q+\){?.*?(?:};|;|})/) || // for / while / with（花括号可省略，需判断）
-						transPartJsStr.match(/^(?:yiled )?(?:await )?do{?.*?[;}]\(Q+\);?/) || // do...while（花括号可省略，需判断）
-						transPartJsStr.match(/^(?:yiled )?(?:await )?try{Q*}(?:catch(?:\(Q+\))?{Q*})?(?:finally{Q*})?;?/) || // try...catch（两个花括号都不能省，所以无需判断）
-						transPartJsStr.match(/^(?:yiled )?(?:await )?switch\(Q+\){Q*};?/) || // switch（花括号不可省略，无需判断）
-						transPartJsStr.match(/^(?:yiled )?(?:await )?class [^{]+?{Q*};?/); // class（花括号不可省略，无需判断）
+					function getMatchRes(transLayerRes, transPartJsStr, startPos) {
+						let transStartLayerRes = transLayerRes.slice(startPos);
+
+						let matchRes;
+						if ((matchRes = transStartLayerRes.match(/^(?:yiled )?(?:await )?if\(Q+\)/))) {
+							// if
+							let offsetPos = matchRes[0].length;
+							if (transStartLayerRes[offsetPos] === "{") {
+								offsetPos = getQuoteEndPos(transStartLayerRes, offsetPos) + 1;
+							} else {
+								offsetPos += getMatchRes(transStartLayerRes, transStartLayerRes.slice(offsetPos), offsetPos)[0].length;
+							}
+							// else if
+							let elseIfMatchRes;
+							while (elseIfMatchRes = transStartLayerRes.slice(offsetPos).match(/^else if\(Q+\)/)) {
+								let elseIfOffsetPos = elseIfMatchRes[0].length;
+								if (transStartLayerRes[offsetPos + elseIfOffsetPos] === "{") {
+									elseIfOffsetPos = getQuoteEndPos(transStartLayerRes, offsetPos + elseIfOffsetPos) + 1;
+								} else {
+									elseIfOffsetPos = getMatchRes(transStartLayerRes, transStartLayerRes.slice(offsetPos), offsetPos + elseIfOffsetPos)[0].length;
+								}
+								offsetPos += elseIfOffsetPos;
+							}
+							// else
+							let elseMatchRes;
+							if ((elseMatchRes = transStartLayerRes.slice(offsetPos).match(new RegExp(`^else[${BAD_VAR_CHARS}]`)))) {
+								offsetPos += elseMatchRes[0].length;
+								if (transStartLayerRes[offsetPos] === "{") {
+									offsetPos = getQuoteEndPos(transStartLayerRes, offsetPos) + 1;
+								} else {
+									offsetPos += getMatchRes(transStartLayerRes, transStartLayerRes.slice(offsetPos), offsetPos)[0].length;
+								}
+							}
+							matchRes[0] = transStartLayerRes.slice(0, offsetPos);
+							return matchRes;
+						} else if ((matchRes = transStartLayerRes.match(/^(?:yiled )?(?:await )?(?:for|while|with)\(Q+\)/))) {
+							// for / while / with
+							let offsetPos = matchRes[0].length;
+							if (transStartLayerRes[offsetPos] === "{") {
+								offsetPos = getQuoteEndPos(transStartLayerRes, offsetPos) + 1;
+							} else {
+								offsetPos += getMatchRes(transStartLayerRes, transStartLayerRes.slice(offsetPos), offsetPos)[0].length;
+							}
+							matchRes[0] = transStartLayerRes.slice(0, offsetPos);
+						} else if ((matchRes = transStartLayerRes.match(/^(?:yiled )?(?:await )?do/))) {
+							// do
+							let offsetPos = matchRes[0].length;
+							if (transStartLayerRes[offsetPos] === "{") {
+								offsetPos = getQuoteEndPos(transStartLayerRes, offsetPos) + 1;
+							} else {
+								offsetPos += getMatchRes(transStartLayerRes, transStartLayerRes.slice(offsetPos), offsetPos)[0].length;
+							}
+							offsetPos += transStartLayerRes.slice(offsetPos).match(/^while\(Q+\);?/)[0].length;
+							matchRes[0] = transStartLayerRes.slice(0, offsetPos);
+						}
+						return matchRes || // if...else | for | while | with | do...while
+							transPartJsStr.match(/^(?:yiled )?(?:await )?(?:async )?function\*? [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
+							transPartJsStr.match(/^(?:yiled )?(?:await )?try{Q*}(?:catch(?:\(Q+\))?{Q*})?(?:finally{Q*})?;?/) || // try...catch（两个花括号都不能省，所以无需判断）
+							transPartJsStr.match(/^(?:yiled )?(?:await )?switch\(Q+\){Q*};?/) || // switch（花括号不可省略，无需判断）
+							transPartJsStr.match(/^(?:yiled )?(?:await )?class [^{]+?{Q*};?/) || // class（花括号不可省略，无需判断）
+							transPartJsStr.match(/^[^;]*;|^[\s\S]*$/);
+					}
+					let matchRes = getMatchRes(transLayerRes, transPartJsStr, startPos);
 					return matchRes && (endPos = startPos + matchRes[0].length);
 				}
 				if (statementType === "SWITCH_CASE") {
@@ -689,8 +746,7 @@ function splitStatements(jsStr, statementType) {
 						startPos = endPos;
 					} else {
 						// 其它
-						splitJsArr.push(...splitStatements(jsStr.slice(startPos, endPos + 1)));
-						startPos = endPos + 1;
+						throw Error("匹配代码失败。");
 					}
 				} else {
 					if (matchStatement()) {
@@ -698,8 +754,7 @@ function splitStatements(jsStr, statementType) {
 						startPos = endPos;
 					} else {
 						// 其它
-						splitJsArr.push(jsStr.slice(startPos, endPos + 1));
-						startPos = endPos + 1;
+						throw Error("匹配代码失败。");
 					}
 				}
 			} while (statementType === "SWITCH_CASE" ? (endPos = transLayerRes.searchOf(/[;:}](?:case[!"'(+\-.\[{~ ]|default:)/, startPos)) !== -1 : (endPos = transLayerRes.indexOf(";", startPos)) !== -1);
