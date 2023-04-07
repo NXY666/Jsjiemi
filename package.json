@@ -15,7 +15,7 @@
 		"url": "https://github.com/NXY666/Jsjiemi.git"
 	},
 	"optionalDependencies": {
-		"vm2": "^3.9.13"
+		"vm2": "^3.9.15"
 	},
 	"scripts": {
 		"decrypt": "node Jsjiemi.js"
