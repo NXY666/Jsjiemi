@@ -1,8 +1,8 @@
 /**
  * Jsjiemi
  * @author NXY666
- * @version 2.14.2
- * @description `JavaScript` 解密工具。请务必遵守**开源协议**，不得用于**非法**或**商业用途**。
+ * @version 2.15.0
+ * @description 基于正则匹配的 `JavaScript` 解密工具。请务必遵守**开源协议**，不得用于**非法**或**商业用途**。
  * @license GPL-3.0
  */
 const fs = require("fs");
@@ -668,16 +668,15 @@ function splitStatements(jsStr, statementType) {
 							while (elseIfMatchRes = transStartLayerRes.slice(offsetPos).match(/^else if\(Q+\)/)) {
 								let elseIfOffsetPos = elseIfMatchRes[0].length;
 								if (transStartLayerRes[offsetPos + elseIfOffsetPos] === "{") {
-									elseIfOffsetPos = getQuoteEndPos(transStartLayerRes, offsetPos + elseIfOffsetPos) + 1;
+									offsetPos = getQuoteEndPos(transStartLayerRes, offsetPos + elseIfOffsetPos) + 1;
 								} else {
-									elseIfOffsetPos = getMatchRes(transStartLayerRes, transStartLayerRes.slice(offsetPos), offsetPos + elseIfOffsetPos)[0].length;
+									offsetPos += getMatchRes(transStartLayerRes, transStartLayerRes.slice(offsetPos), offsetPos + elseIfOffsetPos)[0].length;
 								}
-								offsetPos += elseIfOffsetPos;
 							}
 							// else
 							let elseMatchRes;
 							if ((elseMatchRes = transStartLayerRes.slice(offsetPos).match(new RegExp(`^else[${BAD_VAR_CHARS}]`)))) {
-								offsetPos += elseMatchRes[0].length;
+								offsetPos += elseMatchRes[0].length - 1;
 								if (transStartLayerRes[offsetPos] === "{") {
 									offsetPos = getQuoteEndPos(transStartLayerRes, offsetPos) + 1;
 								} else {
@@ -695,9 +694,9 @@ function splitStatements(jsStr, statementType) {
 								offsetPos += getMatchRes(transStartLayerRes, transStartLayerRes.slice(offsetPos), offsetPos)[0].length;
 							}
 							matchRes[0] = transStartLayerRes.slice(0, offsetPos);
-						} else if ((matchRes = transStartLayerRes.match(/^(?:yiled )?(?:await )?do/))) {
+						} else if ((matchRes = transStartLayerRes.match(new RegExp(`^(?:yiled )?(?:await )?do[${BAD_VAR_CHARS}]`)))) {
 							// do
-							let offsetPos = matchRes[0].length;
+							let offsetPos = matchRes[0].length - 1;
 							if (transStartLayerRes[offsetPos] === "{") {
 								offsetPos = getQuoteEndPos(transStartLayerRes, offsetPos) + 1;
 							} else {
@@ -989,7 +988,7 @@ outputFile(js, 0);
 logger.logWithoutDetermine("解除全局加密");
 const STATEMENTS_TYPE_SCHEMAS = {
 	signInfo: {
-		"Self": /^var (?:_?[0-9a-zA-Z$ｉＯ]+?='S+?',(?:_?[0-9a-zA-Z$ｉＯ]+?_=\['S+?'],)?)?_?[0-9a-zA-Z$]+=\[_?[0-9a-zA-Z$ｉＯ']+?(?:,'S+?')*?];?/
+		"Self": /^var (?:[_0-9a-zA-Z$ｉＯ]+?='S+?',(?:[_0-9a-zA-Z$ｉＯ]+?=(\['S+?']|'S+?'),)?)?[_0-9a-zA-Z$]+=\[_?[0-9a-zA-Z$ｉＯ']+?(?:,'S+?')*?];?/
 	},
 	preprocessFunction: {
 		// _0x102809='po';var _0x111dc8='shift',_0x47c13d='push'
@@ -1091,6 +1090,9 @@ function getStatementsType(jsArr) {
 					} else if (/^[a-z]+$/.test(signName)) {
 						GLOBAL_DECRYPTOR_INFO.signInfo.confuseType = "abc";
 						GLOBAL_DECRYPTOR_INFO.signInfo.nameRegExp = `[a-z]+`;
+					} else if (/^(?:encode_version|__encode)$/.test(signName)) {
+						GLOBAL_DECRYPTOR_INFO.signInfo.confuseType = "v5";
+						GLOBAL_DECRYPTOR_INFO.signInfo.nameRegExp = `_0x[0-9a-f]+`;
 					} else {
 						throw Error(`包含未知的混淆模式“${signName}”。`);
 					}
@@ -1309,10 +1311,11 @@ function getCodeBlockDecryptorName(jsStr) {
 	let checkRes = transLayer2Res.slice(startPos, endPos).split(",").every(function (objectItem) {
 		let itemTransRes = transStrRes.slice(strScanLen, strScanLen + objectItem.length);
 		let itemTransLayer2Res = transLayer(itemTransRes, 2, true);
-		if (objectItem.match(/^'S+':'S+'$/) || itemTransLayer2Res.match(/^'S+':function\([^)]*\)\{return[^;]*;}$/)) {
+		if (objectItem.match(/^'S+':'S+'$/) || itemTransLayer2Res.match(/^'S+':function(?: _?[0-9a-zA-Z$]+)?\([^)]*\)\{return[^;]*;}$/)) {
 			strScanLen += objectItem.length + 1;
 			return true;
 		} else {
+			// fs.appendFileSync("res.txt", "局部格式检查不通过:" + itemTransLayer2Res + "\n");
 			return false;
 		}
 	});
@@ -1490,7 +1493,7 @@ function replaceDecObj(callStr, leftSignPri = 0, rightSignPri = 0) {
 		let callParamList = callParamsStr.splitByOtherStr(transCallLayer2.slice(callParamStartPos, callParamEndPos), ",");
 		// 获取解密函数的参数列表
 		let funcStr = memberRef.toString();
-		let funcParamList = funcStr.match(/function\s*\(([^)]*)\)/)[1].split(','),
+		let funcParamList = funcStr.match(/function(?:\s+[^(]+)?\(([^)]*)\)/)[1].split(','),
 			funcBodyStr = funcStr.match(/\{return ?((?:.|\n)*?);?}/)?.[1];
 		let funcExpList = splitExp(funcBodyStr), funcExpPriList, returnList = [];
 		let ignoreBracket = false;
@@ -1648,7 +1651,8 @@ function clearDeadCodes(jsArr, isShowProgress) {
 		let transStrRes = transStr(jsArr[0]), transLayerRes = transLayer(transStrRes, 1, true);
 		if (/^if\('S+'[=!]=='S+'\)/.test(transStrRes)) {
 			let transFakeIfStr = transLayerRes.match(/if\(Q*\){Q*}else{Q*}/)[0];
-			return clearDeadCodes(splitStatements(simplifyIf(jsArr[0].slice(0, transFakeIfStr.length)), "COMMON"));
+			let simplifyIfRes = simplifyIf(jsArr[0].slice(0, transFakeIfStr.length));
+			return clearDeadCodes(splitStatements(simplifyIfRes, simplifyIfRes ? "COMMON" : "EMPTY"));
 		}
 	} else if (jsArr.length === 2) {
 		// switch死代码
