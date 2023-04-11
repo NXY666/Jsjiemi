@@ -1,7 +1,7 @@
 /**
  * Jsjiemi
  * @author NXY666
- * @version 2.14.2
+ * @version 2.14.3
  * @description `JavaScript` 解密工具。请务必遵守**开源协议**，不得用于**非法**或**商业用途**。
  * @license GPL-3.0
  */
@@ -695,7 +695,7 @@ function splitStatements(jsStr, statementType) {
 								offsetPos += getMatchRes(transStartLayerRes, transStartLayerRes.slice(offsetPos), offsetPos)[0].length;
 							}
 							matchRes[0] = transStartLayerRes.slice(0, offsetPos);
-						} else if ((matchRes = transStartLayerRes.match(/^(?:yiled )?(?:await )?do/))) {
+						} else if ((matchRes = transStartLayerRes.match(/^(?:yield )?(?:await )?do\b/))) {
 							// do
 							let offsetPos = matchRes[0].length;
 							if (transStartLayerRes[offsetPos] === "{") {
