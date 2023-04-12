@@ -1,7 +1,7 @@
 /**
  * Jsjiemi
  * @author NXY666
- * @version 2.15.0
+ * @version 2.15.1
  * @description 基于正则匹配的 `JavaScript` 解密工具。请务必遵守**开源协议**，不得用于**非法**或**商业用途**。
  * @license GPL-3.0
  */
@@ -655,7 +655,7 @@ function splitStatements(jsStr, statementType) {
 						let transStartLayerRes = transLayerRes.slice(startPos);
 
 						let matchRes;
-						if ((matchRes = transStartLayerRes.match(/^(?:yiled )?(?:await )?if\(Q+\)/))) {
+						if ((matchRes = transStartLayerRes.match(/^(?:yield )?(?:await )?if\(Q+\)/))) {
 							// if
 							let offsetPos = matchRes[0].length;
 							if (transStartLayerRes[offsetPos] === "{") {
@@ -685,7 +685,7 @@ function splitStatements(jsStr, statementType) {
 							}
 							matchRes[0] = transStartLayerRes.slice(0, offsetPos);
 							return matchRes;
-						} else if ((matchRes = transStartLayerRes.match(/^(?:yiled )?(?:await )?(?:for|while|with)\(Q+\)/))) {
+						} else if ((matchRes = transStartLayerRes.match(/^(?:yield )?(?:await )?(?:for|while|with)\(Q+\)/))) {
 							// for / while / with
 							let offsetPos = matchRes[0].length;
 							if (transStartLayerRes[offsetPos] === "{") {
@@ -694,7 +694,7 @@ function splitStatements(jsStr, statementType) {
 								offsetPos += getMatchRes(transStartLayerRes, transStartLayerRes.slice(offsetPos), offsetPos)[0].length;
 							}
 							matchRes[0] = transStartLayerRes.slice(0, offsetPos);
-						} else if ((matchRes = transStartLayerRes.match(new RegExp(`^(?:yiled )?(?:await )?do[${BAD_VAR_CHARS}]`)))) {
+						} else if ((matchRes = transStartLayerRes.match(new RegExp(`^(?:yield )?(?:await )?do[${BAD_VAR_CHARS}]`)))) {
 							// do
 							let offsetPos = matchRes[0].length - 1;
 							if (transStartLayerRes[offsetPos] === "{") {
@@ -706,10 +706,10 @@ function splitStatements(jsStr, statementType) {
 							matchRes[0] = transStartLayerRes.slice(0, offsetPos);
 						}
 						return matchRes || // if...else | for | while | with | do...while
-							transPartJsStr.match(/^(?:yiled )?(?:await )?(?:async )?function\*? [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
-							transPartJsStr.match(/^(?:yiled )?(?:await )?try{Q*}(?:catch(?:\(Q+\))?{Q*})?(?:finally{Q*})?;?/) || // try...catch（两个花括号都不能省，所以无需判断）
-							transPartJsStr.match(/^(?:yiled )?(?:await )?switch\(Q+\){Q*};?/) || // switch（花括号不可省略，无需判断）
-							transPartJsStr.match(/^(?:yiled )?(?:await )?class [^{]+?{Q*};?/) || // class（花括号不可省略，无需判断）
+							transPartJsStr.match(/^(?:yield )?(?:await )?(?:async )?function\*? [^(]+?\(Q*\){Q*};?/) || // function（花括号不可省略，无需判断）
+							transPartJsStr.match(/^(?:yield )?(?:await )?try{Q*}(?:catch(?:\(Q+\))?{Q*})?(?:finally{Q*})?;?/) || // try...catch（两个花括号都不能省，所以无需判断）
+							transPartJsStr.match(/^(?:yield )?(?:await )?switch\(Q+\){Q*};?/) || // switch（花括号不可省略，无需判断）
+							transPartJsStr.match(/^(?:yield )?(?:await )?class [^{]+?{Q*};?/) || // class（花括号不可省略，无需判断）
 							transPartJsStr.match(/^[^;]*;|^[\s\S]*$/);
 					}
 					let matchRes = getMatchRes(transLayerRes, transPartJsStr, startPos);
