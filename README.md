@@ -379,6 +379,8 @@ function cancelMacWithUserNameAndMac(_0x1437f8, _0x17c421, _0x18daca) {
 * 请严格遵守开源协议，**严禁**将本工具用于**非法**或**商业用途**。
 * 如因使用不当造成的任何法律责任，由使用者**自行承担**。（😅）
 
-## 特别感谢
+## 不太感谢
+
+> JetBrains 说我咕太久，不给我 License 用了。 :(
 
 [![Licenses for Open Source Development](https://img.shields.io/badge/JetBrains-Open%20Source%20License-white?logo=JetBrains&style=plastic)](https://www.jetbrains.com/community/opensource/#support)

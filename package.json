@@ -1,6 +1,6 @@
 {
 	"name": "jsjiemi",
-	"version": "2.15.1",
+	"version": "2.16.0",
 	"description": "A decryptor for JavaScript.",
 	"keywords": ["javascript", "decryptor", "jsjiemi"],
 	"homepage": "https://github.com/NXY666/Jsjiemi",
@@ -15,7 +15,7 @@
 		"url": "https://github.com/NXY666/Jsjiemi.git"
 	},
 	"optionalDependencies": {
-		"vm2": "^3.9.16"
+		"vm2": "^3.9.19"
 	},
 	"scripts": {
 		"decrypt": "node Jsjiemi.js"
