@@ -134,6 +134,7 @@ const BAD_VAR_CHARS_WITHOUT_INDEXER = BAD_VAR_CHARS.replace("\\u002f", "\\u002d\
 
 // fs.writeFileSync("res.txt", "");
 
+// noinspection JSUnusedGlobalSymbols
 /**
  * 日志工具
  * */
@@ -1045,7 +1046,8 @@ const STATEMENTS_TYPE_SCHEMAS = {
 		// c['push'](c['shift']());
 		"PushAndShift": /_?[0-9a-zA-Z$]+\['push']\(_?[0-9a-zA-Z$]+\['shift']\(\)\)/,
 		// return _0x43c762(++_0x3c2786,_0x2db158)>>_0x3c2786^_0x2db158;
-		"ReturnWith++And>>And^": /return _?[0-9a-zA-Z$]+\(\+\+_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)>>_?[0-9a-zA-Z$]+\^_?[0-9a-zA-Z$]+/,
+		// return(_0x43c762(++_0x3c2786,_0x2db158)>>_0x3c2786)^_0x2db158;
+		"ReturnWith++And>>And^": /return[ (]_?[0-9a-zA-Z$]+\(\+\+_?[0-9a-zA-Z$]+,_?[0-9a-zA-Z$]+\)>>_?[0-9a-zA-Z$]+\)?\^_?[0-9a-zA-Z$]+/,
 		// var _0xeaaebc={'data':{'key':'cookie','value':'timeout'}
 		"CookieTimeoutDataObject": /var _?[0-9a-zA-Z$]+=\{'data':\{'key':'cookie','value':'timeout'}/,
 		// new RegExp\(\'\(\?\:\^\|\;\\x20\)\'\+_0x49a403\[\'replace\'\]\(\/\(\[\.\$\?\*\|\{\}\(\)\[\]\\\/\+\^\]\)\/g\,\'\$1\'\)\+\'\=\(\[\^\;\]\*\)\'\)
@@ -1332,8 +1334,8 @@ logger.logWithoutProgress("解除代码块加密");
  * @returns {string | boolean} 若传入的代码块包含加密对象则输出加密对象名称，反之则输出false。
  */
 function getCodeBlockDecryptorName(jsStr) {
-	// jsStr为空或不是以var 开头
-	if (!jsStr || jsStr.slice(0, 4) !== "var ") {
+	// jsStr为空或不是以var 或 const 开头
+	if (!jsStr?.startsWith("var ") && !jsStr?.startsWith("const ")) {
 		// fs.appendFileSync("res.txt", "初步检查不通过:" + jsStr.slice(0, 100) + "\n");
 		// console.log("初步检查不通过:", jsStr.slice(0, 100));
 		return false;
@@ -1345,7 +1347,7 @@ function getCodeBlockDecryptorName(jsStr) {
 	let startPos = transLayer2Res.indexOf("{") + 1, endPos = transLayer2Res.lastIndexOf("}"), strScanLen = 0;
 
 	// 先过一遍
-	if (!transLayerRes.match(/var _?[0-9a-zA-Z$]+=\{Q+};/)) {
+	if (!transLayerRes.match(/(?:var|const) _?[0-9a-zA-Z$]+=\{Q+};/)) {
 		// fs.appendFileSync("res.txt", "局部格式检查不通过:" + jsStr.slice(0, 100) + "\n");
 		return false;
 	}
